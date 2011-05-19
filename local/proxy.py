@@ -78,13 +78,13 @@ class RandomTCPConnection(object):
     def connect(self, hosts, port, timeout, step):
         #hosts = random.sample(hosts, self.CONNECT_COUNT)
         if step > 1:
-            logging.debug("RandomTCPConnection multi step connect: (%s, %s)" % (hosts, port))
+            logging.debug("RandomTCPConnection multi step connect: (%r, %r)" % (hosts, port))
             socks = []
             for i, host in enumerate(hosts, 1):
                 sock_family = socket.AF_INET if '.' in host else socket.AF_INET6
                 sock = socket.socket(sock_family, socket.SOCK_STREAM)
                 sock.setblocking(0)
-                logging.debug('RandomTCPConnection connect_ex (%s, %s)', host, port)
+                logging.debug('RandomTCPConnection connect_ex (%r, %r)', host, port)
                 err = sock.connect_ex((host, port))
                 self._sockets.add(sock)
                 socks.append(sock)
@@ -101,10 +101,10 @@ class RandomTCPConnection(object):
             else:
                 raise RuntimeError(r'Cannot Connect to %s:%s', hosts, port)
         else:
-            logging.debug("RandomTCPConnection single step connect: (%s, %s)" % (hosts, port))
+            logging.debug("RandomTCPConnection single step connect: (%r, %r)" % (hosts, port))
             for host in hosts:
                 try:
-                    logging.debug('RandomTCPConnection connect_ex (%s, %s)', host, port)
+                    logging.debug('RandomTCPConnection connect_ex (%r, %r)', host, port)
                     sock_family = socket.AF_INET if '.' in host else socket.AF_INET6
                     sock = socket.socket(sock_family, socket.SOCK_STREAM)
                     sock.connect((host, port))
@@ -129,13 +129,13 @@ def socket_create_connection(address, timeout=10, source_address=None):
                 hosts, timeout, step = common.GAE_HTTP, common.GAE_HTTP_TIMEOUT, common.GAE_HTTP_STEP
             else:
                 hosts, timeout, step = common.GAE_HTTPS, common.GAE_HTTPS_TIMEOUT, common.GAE_HTTPS_STEP
-            logging.debug("socket_create_connection multi step connect: (%s, %s)" % (host, port))
+            logging.debug("socket_create_connection multi step connect: ", host, port)
             conn = RandomTCPConnection(hosts, port, timeout, step)
             #conn.close()
             sock = conn.socket
             return sock
         except socket.error, msg:
-            logging.error('socket_create_connection connect fail:', (host, port))
+            logging.error('socket_create_connection connect fail: (%r, %r)', host, port)
             #conn.close()
             sock = None
         if not sock:
@@ -519,7 +519,7 @@ class ConnectProxyHandler(BaseHTTPServer.BaseHTTPRequestHandler):
         try:
             ssl_sock = ssl.wrap_socket(self.connection, keyFile, crtFile, True)
         except ssl.SSLError, e:
-            logging.exception('SSLError: ' + str(e))
+            logging.exception('SSLError: %s', e)
             return
 
         # rewrite request line, url to abs
