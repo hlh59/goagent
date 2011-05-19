@@ -41,7 +41,7 @@ class Common(object):
         logging.basicConfig(level=getattr(logging, self.LISTEN_DEBUG), format='%(levelname)s - - %(asctime)s %(message)s', datefmt='[%d/%b/%Y %H:%M:%S]')
         self.HOSTS             = self.config.items('hosts')
         self.GAE_HOST          = self.config.get('gae', 'host')
-        self.GAE_PASSWORD      = self.config.get('gae', 'password').strip().strip('"\'') if self.config.has_option('gae', 'password') else ''
+        self.GAE_PASSWORD      = self.config.get('gae', 'password').strip()
         self.GAE_HOSTS         = self.GAE_HOST.split('|')
         self.GAE_PATH          = self.config.get('gae', 'path')
         self.GAE_PREFER        = self.config.get('gae', 'prefer')
@@ -54,7 +54,6 @@ class Common(object):
         self.GAE_HTTPS_STEP    = self.config.getint('gae', 'https_step')
         self.GAE_PROXY         = dict(re.match(r'^(\w+)://(\S+)$', proxy.strip()).group(1, 2) for proxy in self.config.get('gae', 'proxy').split('|')) if self.config.has_option('gae', 'proxy') else {}
         self.GAE_BINDHOSTS     = dict((host, self.GAE_HOSTS[int(ord(os.urandom(1))/256.0*len(self.GAE_HOSTS))]) for host in self.config.get('gae', 'bindhosts').split('|')) if self.config.has_option('gae', 'bindhosts') else {}
-        logging.debug('map bindhosts to %r', self.GAE_BINDHOSTS)
 
     def select_fetchserver(self, url):
         gae_host = None
@@ -628,6 +627,8 @@ if __name__ == '__main__':
         print 'Local Proxy  : %s' % common.GAE_PROXY
     print 'GAE Mode     : %s' % common.GAE_PREFER
     print 'GAE Servers  : %s' % common.GAE_HOST
+    if common.GAE_BINDHOSTS:
+        print 'GAE BindHost : %s' % common.GAE_BINDHOSTS
     print '--------------------------------------------'
     if os.name == 'nt' and not common.LISTEN_VISIBLE:
         ctypes.windll.user32.ShowWindow(ctypes.windll.kernel32.GetConsoleWindow(), 0)
