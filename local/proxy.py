@@ -77,10 +77,9 @@ class RandomTCPConnection(object):
         self.connect(hosts, port, timeout, step)
     def connect(self, hosts, port, timeout, step):
         #hosts = random.sample(hosts, self.CONNECT_COUNT)
-        logging.debug('RandomTCPConnection to %r:%d', hosts, port)
-        socks = []
         if step > 1:
             logging.debug("RandomTCPConnection multi step connect: (%s, %s)" % (hosts, port))
+            socks = []
             for i, host in enumerate(hosts, 1):
                 sock_family = socket.AF_INET if '.' in host else socket.AF_INET6
                 sock = socket.socket(sock_family, socket.SOCK_STREAM)
@@ -124,7 +123,7 @@ def socket_create_connection(address, timeout=10, source_address=None):
     host, port = address
     logging.debug('socket_create_connection connect (%r, %r)', host, port)
     if host.endswith('.appspot.com'):
-        msg = "getaddrinfo returns an empty list"
+        msg = "socket_create_connection returns an empty list"
         try:
             if common.GAE_PREFER == 'http':
                 hosts, timeout, step = common.GAE_HTTP, common.GAE_HTTP_TIMEOUT, common.GAE_HTTP_STEP
