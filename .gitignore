@@ -1,5 +1,4 @@
 *.pyc
 *.pyo
-local/proxy.ini
 local/.gacert/*
 local/ssl/serial
