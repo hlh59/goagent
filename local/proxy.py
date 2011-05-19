@@ -143,13 +143,6 @@ def socket_create_connection(address, timeout=10, source_address=None):
         return _socket_create_connection(address, timeout)
 socket.create_connection = socket_create_connection
 
-class DummyRootCA(object):
-    BASEDIR = os.path.dirname(__file__)
-    def getCertificate(self, host):
-        keyFile = os.path.join(self.BASEDIR, 'ssl/ca.key')
-        crtFile = os.path.join(self.BASEDIR, 'ssl/ca.crt')
-        return (keyFile, crtFile)
-
 class RootCA(object):
     '''RootCA module, based on WallProxy 0.4.0'''
 
@@ -159,7 +152,10 @@ class RootCA(object):
         #homedir = os.environ['USERPROFILE' if os.name == 'nt' else 'HOME']
         homedir = os.path.dirname(__file__)
         self.cert_dir = os.path.join(homedir, '.gacert')
-        self.checkCA()
+        try:
+            self.checkCA()
+        except:
+            pass
 
     def readFile(self, filename):
         try:
@@ -232,7 +228,7 @@ class RootCA(object):
         keyFile = os.path.join(self.cert_dir, '%s.key' % host)
         crtFile = os.path.join(self.cert_dir, '%s.crt' % host)
         if not os.path.isfile(keyFile) or not os.path.isfile(crtFile):
-            if not OpenSSL.crypto:
+            if not openssl_enabled:
                 keyFile = os.path.join(self.BASEDIR, 'ssl/ca.key')
                 crtFile = os.path.join(self.BASEDIR, 'ssl/ca.crt')
                 return (keyFile, crtFile)
@@ -259,23 +255,10 @@ class RootCA(object):
         cakey = self.readFile(cakeyFile)
         cacrt = self.readFile(cacrtFile)
         self.SERIAL = self.readFile(serialFile)
-        try:
-            self.CA = (self.loadPEM(cakey, 0), self.loadPEM(cacrt, 2))
-            self.SERIAL = int(self.SERIAL)
-        except:
-            cakey, cacrt = self.makeCA()
-            self.SERIAL = 0
-            #Remove old certifications, because ca and cert must be in pair
-            for name in os.listdir(self.cert_dir):
-                path = os.path.join(self.cert_dir, name)
-                if os.path.isfile(path):
-                    os.remove(path)
-            self.writeFile(cakeyFile, cakey)
-            self.writeFile(cacrtFile, cacrt)
-            self.writeFile(serialFile, self.SERIAL)
-            self.CA = (self.loadPEM(cakey, 0), self.loadPEM(cacrt, 2))
+        self.SERIAL = int(self.SERIAL)
+        self.CA = (self.loadPEM(cakey, 0), self.loadPEM(cacrt, 2))
 
-ROOTCA = RootCA() if openssl_enabled else DummyRootCA()
+rootca = RootCA()
 
 def gae_encode_data(dic):
     return '&'.join('%s=%s' % (k, binascii.b2a_hex(str(v))) for k, v in dic.iteritems())
@@ -512,7 +495,7 @@ class ConnectProxyHandler(BaseHTTPServer.BaseHTTPRequestHandler):
     def _forward(self):
         # for ssl proxy
         host, _, port = self.path.rpartition(':')
-        keyFile, crtFile = ROOTCA.getCertificate(host)
+        keyFile, crtFile = rootca.getCertificate(host)
         self.send_response(200)
         self.end_headers()
         try:
