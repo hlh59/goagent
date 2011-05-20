@@ -75,7 +75,7 @@ class RandomTCPConnection(object):
         self.connect(hostslist, port, timeout)
     def connect(self, hostslist, port, timeout):
         for hosts in hostslist:
-            logging.debug("RandomTCPConnection multi step connect hosts: (%r, %r)" % (hosts, port))
+            logging.debug("RandomTCPConnection multi step connect hosts: (%r, %r)", hosts, port)
             socks = []
             for host in hosts:
                 sock_family = socket.AF_INET if '.' in host else socket.AF_INET6
