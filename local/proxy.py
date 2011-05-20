@@ -66,10 +66,6 @@ class Common(object):
 
 common = Common()
 
-def shuffle_split(seq, step):
-    random.shuffle(seq)
-    return [seq[i:i+step] for i in xrange(0,len(seq),step)]
-
 class RandomTCPConnection(object):
     '''random tcp connection class'''
     def __init__(self, hosts, port, timeout, step):
@@ -77,7 +73,8 @@ class RandomTCPConnection(object):
         self._sockets = set([])
         self.connect(hosts, port, timeout, step)
     def connect(self, hosts, port, timeout, step):
-        hostslist = shuffle_split(hosts, step)
+        random.shuffle(hosts)
+        hostslist = [hosts[i:i+step] for i in xrange(0,len(hosts),step)]
         for hosts in hostslist:
             logging.debug("RandomTCPConnection multi step connect hosts: (%r, %r)", hosts, port)
             socks = []
