@@ -423,11 +423,11 @@ class ConnectProxyHandler(BaseHTTPServer.BaseHTTPRequestHandler):
         # BUT, sometimes this script is running in Linux/MAC...
         for hostpat, hosts in common.HOSTS:
             if host.endswith(hostpat):
-                return self._direct(host, port, hosts)
+                return self._direct(host, port, hosts, timeout=4, step=4)
         else:
             return self._forward()
 
-    def _direct(self, host, port, hosts):
+    def _direct(self, host, port, hosts, timeout, step):
         DIRECT_KEEPLIVE = 60
         DIRECT_TICK = 2
         try:
@@ -435,9 +435,10 @@ class ConnectProxyHandler(BaseHTTPServer.BaseHTTPRequestHandler):
             if hosts:
                 hosts = hosts.split('|')
             else:
-                hosts = [socket.getaddrinfo(host, port)[0][-1][0]]
-            self.log_message('Random TCPConnection to %s within %d hosts' % (self.path, len(hosts)))
-            conn = RandomTCPConnection(hosts, port, common.GAE_HTTPS_TIMEOUT, common.GAE_HTTPS_STEP)
+                hosts = [x[-1][0] for x in socket.getaddrinfo(host, port)]
+            self.log_message('Random TCPConnection to %s with %d hosts' % (self.path, len(hosts)))
+            hostslist = [hosts[i:i+step] for i in xrange(0,len(hosts),step)]
+            conn = RandomTCPConnection(hostslist, port, timeout)
             if conn.socket is None:
                 return self.send_error(502, 'Cannot Connect to %s:%s' % (hosts, port))
             self.log_request(200)
