@@ -1,1 +1,1 @@
-@"%~dp0..\local\goagent-py25.exe" uploader.py || pause
+@"%~dp0..\local\goagentd.exe" uploader.py || pause
