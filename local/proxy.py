@@ -69,10 +69,10 @@ common = Common()
 
 class RandomTCPConnection(object):
     '''random tcp connection class'''
-    def __init__(self, hosts, port, timeout):
+    def __init__(self, hostslist, port, timeout):
         self.socket = None
         self._sockets = set([])
-        self.connect(hosts, port, timeout)
+        self.connect(hostslist, port, timeout)
     def connect(self, hostslist, port, timeout):
         for hosts in hostslist:
             logging.debug("RandomTCPConnection multi step connect hosts: (%r, %r)" % (hosts, port))
@@ -113,13 +113,13 @@ def socket_create_connection(address, timeout=10, source_address=None):
                 hostslist, timeout = common.GAE_HTTP_HOSTSLIST, common.GAE_HTTP_TIMEOUT
             else:
                 hostslist, timeout = common.GAE_HTTPS_HOSTSLIST, common.GAE_HTTPS_TIMEOUT
-            logging.debug("socket_create_connection multi step connect: (%r, %r)", host, port)
+            logging.debug("socket_create_connection connect hostslist: (%r, %r)", hostslist, port)
             conn = RandomTCPConnection(hostslist, port, timeout)
             #conn.close()
             sock = conn.socket
             return sock
         except socket.error, msg:
-            logging.error('socket_create_connection connect fail: (%r, %r)', host, port)
+            logging.error('socket_create_connection connect fail: (%r, %r)', hostslist, port)
             #conn.close()
             sock = None
         if not sock:
