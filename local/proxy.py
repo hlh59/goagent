@@ -45,7 +45,6 @@ class Common(object):
         self.GAE_HOSTS         = self.GAE_HOST.split('|')
         self.GAE_PATH          = self.config.get('gae', 'path')
         self.GAE_PREFER        = self.config.get('gae', 'prefer')
-        self.GAE_VERIFY        = self.config.getint('gae', 'verify')
         self.GAE_HTTP          = self.config.get('gae', 'http').split('|')
         self.GAE_HTTP_TIMEOUT  = self.config.getint('gae', 'http_timeout')
         self.GAE_HTTP_STEP     = self.config.getint('gae', 'http_step')
@@ -55,16 +54,14 @@ class Common(object):
         self.GAE_PROXY         = dict(re.match(r'^(\w+)://(\S+)$', proxy.strip()).group(1, 2) for proxy in self.config.get('gae', 'proxy').split('|')) if self.config.has_option('gae', 'proxy') else {}
         self.GAE_BINDHOSTS     = dict((host, self.GAE_HOSTS[int(ord(os.urandom(1))/256.0*len(self.GAE_HOSTS))]) for host in self.config.get('gae', 'bindhosts').split('|')) if self.config.has_option('gae', 'bindhosts') else {}
 
-    def select_fetchserver(self, url):
-        gae_host = None
+    def select_gaehost(self, url):
+        gaehost = None
         if len(self.GAE_HOSTS) == 1:
-            gae_host = self.GAE_HOSTS[0]
-        else:
-            if self.GAE_BINDHOSTS:
-                gae_host = self.GAE_BINDHOSTS.get(urlparse.urlsplit(url)[1])
-            gae_host = gae_host or self.GAE_HOSTS[int(ord(os.urandom(1))/256.0*len(self.GAE_HOSTS))]
-        gae_fetchserver = '%s://%s%s' % (self.GAE_PREFER, gae_host, self.GAE_PATH)
-        return gae_fetchserver
+            return self.GAE_HOSTS[0]
+        if self.GAE_BINDHOSTS:
+            gaehost = self.GAE_BINDHOSTS.get(urlparse.urlsplit(url)[1])
+        gaehost = gaehost or self.GAE_HOSTS[int(ord(os.urandom(1))/256.0*len(self.GAE_HOSTS))]
+        return gaehost
 
 common = Common()
 
@@ -281,7 +278,8 @@ class GaeProxyHandler(BaseHTTPServer.BaseHTTPRequestHandler):
         params = zlib.compress(params)
         for i in range(1, 4):
             try:
-                fetchserver = common.select_fetchserver(url)
+                gaehost = common.select_gaehost(url)
+                fetchserver = '%s://%s%s' % (common.GAE_PREFER, gaehost, common.GAE_PATH)
                 logging.debug('GaeProxyHandler fetch %r from %r', url, fetchserver)
                 request = urllib2.Request(fetchserver, params)
                 request.add_header('Content-Type', 'application/octet-stream')
