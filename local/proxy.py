@@ -16,6 +16,7 @@ import BaseHTTPServer, SocketServer
 import ConfigParser
 import ssl
 import ctypes
+import random
 try:
     import OpenSSL
     openssl_enabled = True
@@ -48,11 +49,9 @@ class Common(object):
         self.GAE_HTTP            = self.config.get('gae', 'http').split('|')
         self.GAE_HTTP_TIMEOUT    = self.config.getint('gae', 'http_timeout')
         self.GAE_HTTP_STEP       = self.config.getint('gae', 'http_step')
-        self.GAE_HTTP_HOSTSLIST  = [self.GAE_HTTP[i:i+self.GAE_HTTP_STEP] for i in xrange(0,len(self.GAE_HTTP),self.GAE_HTTP_STEP)]
         self.GAE_HTTPS           = self.config.get('gae', 'https').split('|')
         self.GAE_HTTPS_TIMEOUT   = self.config.getint('gae', 'https_timeout')
         self.GAE_HTTPS_STEP      = self.config.getint('gae', 'https_step')
-        self.GAE_HTTPS_HOSTSLIST = [self.GAE_HTTPS[i:i+self.GAE_HTTPS_STEP] for i in xrange(0,len(self.GAE_HTTPS),self.GAE_HTTPS_STEP)]
         self.GAE_PROXY           = dict(re.match(r'^(\w+)://(\S+)$', proxy.strip()).group(1, 2) for proxy in self.config.get('gae', 'proxy').split('|')) if self.config.has_option('gae', 'proxy') else {}
         self.GAE_BINDHOSTS       = dict((host, self.GAE_HOSTS[int(ord(os.urandom(1))/256.0*len(self.GAE_HOSTS))]) for host in self.config.get('gae', 'bindhosts').split('|')) if self.config.has_option('gae', 'bindhosts') else {}
 
@@ -67,13 +66,18 @@ class Common(object):
 
 common = Common()
 
+def shuffle_split(seq, step):
+    random.shuffle(seq)
+    return [seq[i:i+step] for i in xrange(0,len(seq),step)]
+
 class RandomTCPConnection(object):
     '''random tcp connection class'''
-    def __init__(self, hostslist, port, timeout):
+    def __init__(self, hosts, port, timeout, step):
         self.socket = None
         self._sockets = set([])
-        self.connect(hostslist, port, timeout)
-    def connect(self, hostslist, port, timeout):
+        self.connect(hosts, port, timeout, step)
+    def connect(self, hosts, port, timeout, step):
+        hostslist = shuffle_split(hosts, step)
         for hosts in hostslist:
             logging.debug("RandomTCPConnection multi step connect hosts: (%r, %r)", hosts, port)
             socks = []
@@ -110,16 +114,16 @@ def socket_create_connection(address, timeout=10, source_address=None):
         msg = "socket_create_connection returns an empty list"
         try:
             if common.GAE_PREFER == 'http':
-                hostslist, timeout = common.GAE_HTTP_HOSTSLIST, common.GAE_HTTP_TIMEOUT
+                hosts, timeout, step = common.GAE_HTTP, common.GAE_HTTP_TIMEOUT, common.GAE_HTTP_STEP
             else:
-                hostslist, timeout = common.GAE_HTTPS_HOSTSLIST, common.GAE_HTTPS_TIMEOUT
-            logging.debug("socket_create_connection connect hostslist: (%r, %r)", hostslist, port)
-            conn = RandomTCPConnection(hostslist, port, timeout)
+                hosts, timeout, step = common.GAE_HTTPS, common.GAE_HTTPS_TIMEOUT, common.GAE_HTTPS_STEP
+            logging.debug("socket_create_connection connect hostslist: (%r, %r)", hosts, port)
+            conn = RandomTCPConnection(hosts, port, timeout, step)
             #conn.close()
             sock = conn.socket
             return sock
         except socket.error, msg:
-            logging.error('socket_create_connection connect fail: (%r, %r)', hostslist, port)
+            logging.error('socket_create_connection connect fail: (%r, %r)', hosts, port)
             #conn.close()
             sock = None
         if not sock:
@@ -437,8 +441,7 @@ class ConnectProxyHandler(BaseHTTPServer.BaseHTTPRequestHandler):
             else:
                 hosts = [x[-1][0] for x in socket.getaddrinfo(host, port)]
             self.log_message('Random TCPConnection to %s with %d hosts' % (self.path, len(hosts)))
-            hostslist = [hosts[i:i+step] for i in xrange(0,len(hosts),step)]
-            conn = RandomTCPConnection(hostslist, port, timeout)
+            conn = RandomTCPConnection(hosts, port, timeout, step)
             if conn.socket is None:
                 return self.send_error(502, 'Cannot Connect to %s:%s' % (hosts, port))
             self.log_request(200)
