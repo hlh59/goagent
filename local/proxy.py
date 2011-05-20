@@ -39,20 +39,22 @@ class Common(object):
         self.LISTEN_VISIBLE    = self.config.getint('listen', 'visible')
         self.LISTEN_DEBUG      = self.config.get('listen', 'debug')
         logging.basicConfig(level=getattr(logging, self.LISTEN_DEBUG), format='%(levelname)s - - %(asctime)s %(message)s', datefmt='[%d/%b/%Y %H:%M:%S]')
-        self.HOSTS             = self.config.items('hosts')
-        self.GAE_HOST          = self.config.get('gae', 'host')
-        self.GAE_PASSWORD      = self.config.get('gae', 'password').strip()
-        self.GAE_HOSTS         = self.GAE_HOST.split('|')
-        self.GAE_PATH          = self.config.get('gae', 'path')
-        self.GAE_PREFER        = self.config.get('gae', 'prefer')
-        self.GAE_HTTP          = self.config.get('gae', 'http').split('|')
-        self.GAE_HTTP_TIMEOUT  = self.config.getint('gae', 'http_timeout')
-        self.GAE_HTTP_STEP     = self.config.getint('gae', 'http_step')
-        self.GAE_HTTPS         = self.config.get('gae', 'https').split('|')
-        self.GAE_HTTPS_TIMEOUT = self.config.getint('gae', 'https_timeout')
-        self.GAE_HTTPS_STEP    = self.config.getint('gae', 'https_step')
-        self.GAE_PROXY         = dict(re.match(r'^(\w+)://(\S+)$', proxy.strip()).group(1, 2) for proxy in self.config.get('gae', 'proxy').split('|')) if self.config.has_option('gae', 'proxy') else {}
-        self.GAE_BINDHOSTS     = dict((host, self.GAE_HOSTS[int(ord(os.urandom(1))/256.0*len(self.GAE_HOSTS))]) for host in self.config.get('gae', 'bindhosts').split('|')) if self.config.has_option('gae', 'bindhosts') else {}
+        self.HOSTS               = self.config.items('hosts')
+        self.GAE_HOST            = self.config.get('gae', 'host')
+        self.GAE_PASSWORD        = self.config.get('gae', 'password').strip()
+        self.GAE_HOSTS           = self.GAE_HOST.split('|')
+        self.GAE_PATH            = self.config.get('gae', 'path')
+        self.GAE_PREFER          = self.config.get('gae', 'prefer')
+        self.GAE_HTTP            = self.config.get('gae', 'http').split('|')
+        self.GAE_HTTP_TIMEOUT    = self.config.getint('gae', 'http_timeout')
+        self.GAE_HTTP_STEP       = self.config.getint('gae', 'http_step')
+        self.GAE_HTTP_HOSTSLIST  = [self.GAE_HTTP[i:i+self.GAE_HTTP_STEP] for i in xrange(0,len(self.GAE_HTTP),self.GAE_HTTP_STEP)]
+        self.GAE_HTTPS           = self.config.get('gae', 'https').split('|')
+        self.GAE_HTTPS_TIMEOUT   = self.config.getint('gae', 'https_timeout')
+        self.GAE_HTTPS_STEP      = self.config.getint('gae', 'https_step')
+        self.GAE_HTTPS_HOSTSLIST = [self.GAE_HTTPS[i:i+self.GAE_HTTPS_STEP] for i in xrange(0,len(self.GAE_HTTPS),self.GAE_HTTPS_STEP)]
+        self.GAE_PROXY           = dict(re.match(r'^(\w+)://(\S+)$', proxy.strip()).group(1, 2) for proxy in self.config.get('gae', 'proxy').split('|')) if self.config.has_option('gae', 'proxy') else {}
+        self.GAE_BINDHOSTS       = dict((host, self.GAE_HOSTS[int(ord(os.urandom(1))/256.0*len(self.GAE_HOSTS))]) for host in self.config.get('gae', 'bindhosts').split('|')) if self.config.has_option('gae', 'bindhosts') else {}
 
     def select_gaehost(self, url):
         gaehost = None
@@ -67,16 +69,15 @@ common = Common()
 
 class RandomTCPConnection(object):
     '''random tcp connection class'''
-    def __init__(self, hosts, port, timeout, step):
+    def __init__(self, hosts, port, timeout):
         self.socket = None
         self._sockets = set([])
-        self.connect(hosts, port, timeout, step)
-    def connect(self, hosts, port, timeout, step):
-        #hosts = random.sample(hosts, self.CONNECT_COUNT)
-        if step > 1:
-            logging.debug("RandomTCPConnection multi step connect: (%r, %r)" % (hosts, port))
+        self.connect(hosts, port, timeout)
+    def connect(self, hostslist, port, timeout):
+        for hosts in hostslist:
+            logging.debug("RandomTCPConnection multi step connect hosts: (%r, %r)" % (hosts, port))
             socks = []
-            for i, host in enumerate(hosts, 1):
+            for host in hosts:
                 sock_family = socket.AF_INET if '.' in host else socket.AF_INET6
                 sock = socket.socket(sock_family, socket.SOCK_STREAM)
                 sock.setblocking(0)
@@ -84,29 +85,16 @@ class RandomTCPConnection(object):
                 err = sock.connect_ex((host, port))
                 self._sockets.add(sock)
                 socks.append(sock)
-                if 0 == i % step or i == len(hosts):
-                    (_, outs, _) = select.select([], socks, [], timeout)
-                    socks = []
-                    if outs:
-                        self.socket = outs[0]
-                        self.socket.setblocking(1)
-                        self._sockets.remove(self.socket)
-                        break
-                    else:
-                        logging.warning('Cannot Connect to %s:%s', hosts[i-self.CONNECT_COUNT:i], port)
+            (_, outs, _) = select.select([], socks, [], timeout)
+            if outs:
+                self.socket = outs[0]
+                self.socket.setblocking(1)
+                self._sockets.remove(self.socket)
+                break
             else:
-                raise RuntimeError(r'Cannot Connect to %s:%s', hosts, port)
+                logging.warning('RandomTCPConnection Cannot Connect to hosts %s:%s', hosts, port)
         else:
-            logging.debug("RandomTCPConnection single step connect: (%r, %r)" % (hosts, port))
-            for host in hosts:
-                try:
-                    logging.debug('RandomTCPConnection connect_ex (%r, %r)', host, port)
-                    sock_family = socket.AF_INET if '.' in host else socket.AF_INET6
-                    sock = socket.socket(sock_family, socket.SOCK_STREAM)
-                    sock.connect((host, port))
-                    conn.sock = sock
-                except:
-                    continue
+            raise RuntimeError(r'RandomTCPConnection Cannot Connect to hostslist %s:%s', hostslist, port)
     def close(self):
         for soc in self._sockets:
             try:
@@ -122,11 +110,11 @@ def socket_create_connection(address, timeout=10, source_address=None):
         msg = "socket_create_connection returns an empty list"
         try:
             if common.GAE_PREFER == 'http':
-                hosts, timeout, step = common.GAE_HTTP, common.GAE_HTTP_TIMEOUT, common.GAE_HTTP_STEP
+                hostslist, timeout = common.GAE_HTTP_HOSTSLIST, common.GAE_HTTP_TIMEOUT
             else:
-                hosts, timeout, step = common.GAE_HTTPS, common.GAE_HTTPS_TIMEOUT, common.GAE_HTTPS_STEP
+                hostslist, timeout = common.GAE_HTTPS_HOSTSLIST, common.GAE_HTTPS_TIMEOUT
             logging.debug("socket_create_connection multi step connect: (%r, %r)", host, port)
-            conn = RandomTCPConnection(hosts, port, timeout, step)
+            conn = RandomTCPConnection(hostslist, port, timeout)
             #conn.close()
             sock = conn.socket
             return sock
