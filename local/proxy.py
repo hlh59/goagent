@@ -73,7 +73,6 @@ class RandomTCPConnection(object):
         self._sockets = set([])
         self.connect(hosts, port, timeout, step)
     def connect(self, hosts, port, timeout, step):
-        random.shuffle(hosts)
         hostslist = [hosts[i:i+step] for i in xrange(0,len(hosts),step)]
         for hosts in hostslist:
             logging.debug("RandomTCPConnection multi step connect hosts: (%r, %r)", hosts, port)
@@ -114,6 +113,7 @@ def socket_create_connection(address, timeout=10, source_address=None):
                 hosts, timeout, step = common.GAE_HTTP, common.GAE_HTTP_TIMEOUT, common.GAE_HTTP_STEP
             else:
                 hosts, timeout, step = common.GAE_HTTPS, common.GAE_HTTPS_TIMEOUT, common.GAE_HTTPS_STEP
+            random.shuffle(hosts)
             logging.debug("socket_create_connection connect hostslist: (%r, %r)", hosts, port)
             conn = RandomTCPConnection(hosts, port, timeout, step)
             #conn.close()
