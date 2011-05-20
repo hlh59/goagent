@@ -18,7 +18,7 @@ import ssl
 import ctypes
 import random
 try:
-    import OpenSSL
+    import OpenSSL.crypto
     openssl_enabled = True
 except ImportError:
     openssl_enabled = False
@@ -579,6 +579,18 @@ class LocalProxyHandler(ConnectProxyHandler, GaeProxyHandler):
             self.wfile.write(data)
         self.connection.close()
 
+    def finish(self):
+        try:
+            self.wfile.close()
+            self.rfile.close()
+        except socket.error, (err, _):
+            # Connection closed by browser
+            if err == errno.EPIPE or err == 10053:
+                msg = 'Software caused connection abort'
+                self.log_message('socket.error: [%s] %r', err, msg)
+            else:
+                raise
+
     do_CONNECT = ConnectProxyHandler.do_CONNECT
     do_GET     = GaeProxyHandler.do_GET
     do_POST    = GaeProxyHandler.do_POST
@@ -587,6 +599,7 @@ class LocalProxyHandler(ConnectProxyHandler, GaeProxyHandler):
 
 class LocalProxyServer(SocketServer.ThreadingMixIn, BaseHTTPServer.HTTPServer):
     address_family = {True:socket.AF_INET6, False:socket.AF_INET}[':' in common.LISTEN_IP]
+    daemon_threads = True
 
 if __name__ == '__main__':
     '''show current config'''
