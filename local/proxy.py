@@ -125,7 +125,7 @@ def socket_create_connection(address, timeout=10, source_address=None):
                 hosts, timeout, step = common.GAE_HTTP, common.GAE_HTTP_TIMEOUT, common.GAE_HTTP_STEP
             else:
                 hosts, timeout, step = common.GAE_HTTPS, common.GAE_HTTPS_TIMEOUT, common.GAE_HTTPS_STEP
-            logging.debug("socket_create_connection multi step connect: ", host, port)
+            logging.debug("socket_create_connection multi step connect: (%r, %r)", host, port)
             conn = RandomTCPConnection(hosts, port, timeout, step)
             #conn.close()
             sock = conn.socket
