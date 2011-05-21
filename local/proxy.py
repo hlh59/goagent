@@ -118,6 +118,7 @@ def socket_create_connection(address, timeout=10, source_address=None):
             conn = RandomTCPConnection(hosts, port, timeout, step)
             #conn.close()
             sock = conn.socket
+            sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, True)
             return sock
         except socket.error, msg:
             logging.error('socket_create_connection connect fail: (%r, %r)', hosts, port)
@@ -578,6 +579,12 @@ class LocalProxyHandler(ConnectProxyHandler, GaeProxyHandler):
             self.send_response(code, message)
             self.wfile.write(data)
         self.connection.close()
+
+##    def setup(self):
+##        self.connection = self.request
+##        self.connection.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, True)
+##        self.rfile = self.connection.makefile('rb', self.rbufsize)
+##        self.wfile = self.connection.makefile('wb', self.wbufsize)
 
     def finish(self):
         try:
