@@ -113,7 +113,7 @@ def socket_create_connection(address, timeout=10, source_address=None):
                 hosts, timeout, step = common.GAE_HTTP, common.GAE_HTTP_TIMEOUT, common.GAE_HTTP_STEP
             else:
                 hosts, timeout, step = common.GAE_HTTPS, common.GAE_HTTPS_TIMEOUT, common.GAE_HTTPS_STEP
-            random.shuffle(hosts)
+                random.shuffle(hosts)
             logging.debug("socket_create_connection connect hostslist: (%r, %r)", hosts, port)
             conn = RandomTCPConnection(hosts, port, timeout, step)
             #conn.close()
@@ -130,10 +130,10 @@ def socket_create_connection(address, timeout=10, source_address=None):
         return _socket_create_connection(address, timeout)
 socket.create_connection = socket_create_connection
 
-##_httplib_HTTPConnection_putrequest = httplib.HTTPConnection.putrequest
-##def httplib_HTTPConnection_putrequest(self, method, url, skip_host=0, skip_accept_encoding=1):
-##    return _httplib_HTTPConnection_putrequest(self, method, url, skip_host, skip_accept_encoding)
-##httplib.HTTPConnection.putrequest = httplib_HTTPConnection_putrequest
+_httplib_HTTPConnection_putrequest = httplib.HTTPConnection.putrequest
+def httplib_HTTPConnection_putrequest(self, method, url, skip_host=0, skip_accept_encoding=1):
+    return _httplib_HTTPConnection_putrequest(self, method, url, skip_host, skip_accept_encoding)
+httplib.HTTPConnection.putrequest = httplib_HTTPConnection_putrequest
 
 class RootCA(object):
     '''RootCA module, based on WallProxy 0.4.0'''
