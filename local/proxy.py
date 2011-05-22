@@ -285,7 +285,7 @@ class GaeProxyHandler(BaseHTTPServer.BaseHTTPRequestHandler):
                 response.close()
             except urllib2.HTTPError, e:
                 # www.google.cn:80 is down, switch to https
-                if e.code in (502, 504):
+                if e.code == 502 or e.code == 504:
                     common.GAE_PREFER = 'https'
                 errors.append('%d: %s' % (e.code, httplib.responses.get(e.code, 'Unknown HTTPError')))
                 continue
