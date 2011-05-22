@@ -130,6 +130,11 @@ def socket_create_connection(address, timeout=10, source_address=None):
         return _socket_create_connection(address, timeout)
 socket.create_connection = socket_create_connection
 
+##_httplib_HTTPConnection_putrequest = httplib.HTTPConnection.putrequest
+##def httplib_HTTPConnection_putrequest(self, method, url, skip_host=0, skip_accept_encoding=1):
+##    return _httplib_HTTPConnection_putrequest(self, method, url, skip_host, skip_accept_encoding)
+##httplib.HTTPConnection.putrequest = httplib_HTTPConnection_putrequest
+
 class RootCA(object):
     '''RootCA module, based on WallProxy 0.4.0'''
 
@@ -254,7 +259,9 @@ def gae_decode_data(qs):
     return dict((k, binascii.a2b_hex(v)) for k, v in (x.split('=') for x in qs.split('&')))
 
 def build_opener():
-    return urllib2.build_opener(urllib2.ProxyHandler(common.GAE_PROXY))
+    opener = urllib2.build_opener(urllib2.ProxyHandler(common.GAE_PROXY))
+    opener.addheaders = []
+    return opener
 
 class GaeProxyHandler(BaseHTTPServer.BaseHTTPRequestHandler):
     partSize = 1024000
