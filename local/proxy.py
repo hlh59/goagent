@@ -271,7 +271,10 @@ class GaeProxyHandler(BaseHTTPServer.BaseHTTPRequestHandler):
 
     def _fetch(self, url, method, headers, payload):
         errors = []
-        params = gae_encode_data({'url':url, 'method':method, 'headers':headers, 'payload':payload, 'password':common.GAE_PASSWORD})
+        params = {'url':url, 'method':method, 'headers':headers, 'payload':payload}
+        if common.GAE_PASSWORD:
+            params['password'] = common.GAE_PASSWORD
+        params = gae_encode_data(params)
         params = zlib.compress(params)
         for i in range(1, 4):
             try:
