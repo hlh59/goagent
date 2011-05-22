@@ -68,9 +68,11 @@ common = Common()
 
 class RandomTCPConnection(object):
     '''random tcp connection class'''
-    def __init__(self, hosts, port, timeout, step):
+    def __init__(self, hosts, port, timeout, step, shuffle=0):
         self.socket = None
         self._sockets = set([])
+        if shuffle:
+            random.shuffle(hosts)
         self.connect(hosts, port, timeout, step)
     def connect(self, hosts, port, timeout, step):
         hostslist = [hosts[i:i+step] for i in xrange(0,len(hosts),step)]
@@ -110,12 +112,11 @@ def socket_create_connection(address, timeout=10, source_address=None):
         msg = "socket_create_connection returns an empty list"
         try:
             if common.GAE_PREFER == 'http':
-                hosts, timeout, step = common.GAE_HTTP, common.GAE_HTTP_TIMEOUT, common.GAE_HTTP_STEP
+                hosts, timeout, step, shuffle = common.GAE_HTTP, common.GAE_HTTP_TIMEOUT, common.GAE_HTTP_STEP, 0
             else:
-                hosts, timeout, step = common.GAE_HTTPS, common.GAE_HTTPS_TIMEOUT, common.GAE_HTTPS_STEP
-                random.shuffle(hosts)
+                hosts, timeout, step, shuffle = common.GAE_HTTPS, common.GAE_HTTPS_TIMEOUT, common.GAE_HTTPS_STEP, 1
             logging.debug("socket_create_connection connect hostslist: (%r, %r)", hosts, port)
-            conn = RandomTCPConnection(hosts, port, timeout, step)
+            conn = RandomTCPConnection(hosts, port, timeout, step, shuffle)
             #conn.close()
             sock = conn.socket
             sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, True)
@@ -275,7 +276,7 @@ class GaeProxyHandler(BaseHTTPServer.BaseHTTPRequestHandler):
         if common.GAE_PASSWORD:
             params['password'] = common.GAE_PASSWORD
         params = gae_encode_data(params)
-        params = zlib.compress(params)
+        params = zlib.compress(params, 9)
         for i in range(1, 4):
             try:
                 gaehost = common.select_gaehost(url)
