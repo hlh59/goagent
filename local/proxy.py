@@ -66,7 +66,7 @@ class Common(object):
 
 common = Common()
 
-class RandomTCPConnection(object):
+class MultiplexConnection(object):
     '''random tcp connection class'''
     def __init__(self, hosts, port, timeout, step, shuffle=0):
         self.socket = None
@@ -77,13 +77,13 @@ class RandomTCPConnection(object):
     def connect(self, hosts, port, timeout, step):
         hostslist = [hosts[i:i+step] for i in xrange(0,len(hosts),step)]
         for hosts in hostslist:
-            logging.debug("RandomTCPConnection multi step connect hosts: (%r, %r)", hosts, port)
+            logging.debug("MultiplexConnection multi step connect hosts: (%r, %r)", hosts, port)
             socks = []
             for host in hosts:
                 sock_family = socket.AF_INET if '.' in host else socket.AF_INET6
                 sock = socket.socket(sock_family, socket.SOCK_STREAM)
                 sock.setblocking(0)
-                logging.debug('RandomTCPConnection connect_ex (%r, %r)', host, port)
+                logging.debug('MultiplexConnection connect_ex (%r, %r)', host, port)
                 err = sock.connect_ex((host, port))
                 self._sockets.add(sock)
                 socks.append(sock)
@@ -94,9 +94,9 @@ class RandomTCPConnection(object):
                 self._sockets.remove(self.socket)
                 break
             else:
-                logging.warning('RandomTCPConnection Cannot Connect to hosts %s:%s', hosts, port)
+                logging.warning('MultiplexConnection Cannot Connect to hosts %s:%s', hosts, port)
         else:
-            raise RuntimeError(r'RandomTCPConnection Cannot Connect to hostslist %s:%s', hostslist, port)
+            raise RuntimeError(r'MultiplexConnection Cannot Connect to hostslist %s:%s', hostslist, port)
     def close(self):
         for soc in self._sockets:
             try:
@@ -116,7 +116,7 @@ def socket_create_connection(address, timeout=10, source_address=None):
             else:
                 hosts, timeout, step, shuffle = common.GAE_HTTPS, common.GAE_HTTPS_TIMEOUT, common.GAE_HTTPS_STEP, 1
             logging.debug("socket_create_connection connect hostslist: (%r, %r)", hosts, port)
-            conn = RandomTCPConnection(hosts, port, timeout, step, shuffle)
+            conn = MultiplexConnection(hosts, port, timeout, step, shuffle)
             #conn.close()
             sock = conn.socket
             sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, True)
@@ -449,8 +449,8 @@ class ConnectProxyHandler(BaseHTTPServer.BaseHTTPRequestHandler):
                 hosts = hosts.split('|')
             else:
                 hosts = [x[-1][0] for x in socket.getaddrinfo(host, port)]
-            self.log_message('Random TCPConnection to %s with %d hosts' % (self.path, len(hosts)))
-            conn = RandomTCPConnection(hosts, port, timeout, step)
+            self.log_message('ConnectProxyHandler MultiplexConnection to %s with %d hosts' % (self.path, len(hosts)))
+            conn = MultiplexConnection(hosts, port, timeout, step)
             if conn.socket is None:
                 return self.send_error(502, 'Cannot Connect to %s:%s' % (hosts, port))
             self.log_request(200)
