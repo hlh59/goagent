@@ -81,6 +81,7 @@ class MultiplexConnection(object):
         self.socket = None
         self._sockets = set([])
         if shuffle:
+            hosts = hosts[:]
             random_shuffle(hosts)
         self.connect(hosts, port, timeout, step)
     def connect(self, hosts, port, timeout, step):
@@ -89,20 +90,23 @@ class MultiplexConnection(object):
         else:
             return self.connect2(hosts, port, timeout, step)
     def connect1(self, hosts, port, timeout, step):
-        for host in hosts:
+        for i, host in enumerate(hosts):
             logging.debug("MultiplexConnection single step connect hosts: (%r, %r)", hosts, port)
             try:
                 sock_family = socket.AF_INET if '.' in host else socket.AF_INET6
-                logging.debug('MultiplexConnection connect_ex (%r, %r)', host, port)
+                logging.debug('MultiplexConnection single step connect_ex (%r, %r)', host, port)
                 sock = socket.socket(sock_family, socket.SOCK_STREAM)
                 sock.settimeout(timeout)
                 sock.connect((host, port))
                 self.socket = sock
+                if i > 0:
+                    hosts[0], hosts[i] == hosts[i], hosts[0]
                 break
             except socket.error, e:
-                logging.warning('MultiplexConnection Cannot Connect to hosts %s:%s', host, port)
+                logging.warning('MultiplexConnection single step Cannot Connect to host %s:%s', host, port)
+                continue
         else:
-            raise RuntimeError(r'MultiplexConnection Cannot Connect to hostslist %s:%s', hosts, port)
+            raise RuntimeError(r'MultiplexConnectionsingle step  Cannot Connect to hosts %s:%s', hosts, port)
     def connect2(self, hosts, port, timeout, step):
         hostslist = [hosts[i:i+step] for i in xrange(0,len(hosts),step)]
         for hosts in hostslist:
@@ -112,7 +116,7 @@ class MultiplexConnection(object):
                 sock_family = socket.AF_INET if '.' in host else socket.AF_INET6
                 sock = socket.socket(sock_family, socket.SOCK_STREAM)
                 sock.setblocking(0)
-                logging.debug('MultiplexConnection connect_ex (%r, %r)', host, port)
+                logging.debug('MultiplexConnection multi step connect_ex (%r, %r)', host, port)
                 err = sock.connect_ex((host, port))
                 self._sockets.add(sock)
                 socks.append(sock)
@@ -123,9 +127,9 @@ class MultiplexConnection(object):
                 self._sockets.remove(self.socket)
                 break
             else:
-                logging.warning('MultiplexConnection Cannot Connect to hosts %s:%s', hosts, port)
+                logging.warning('MultiplexConnection multi step Cannot Connect to hosts %s:%s', hosts, port)
         else:
-            raise RuntimeError(r'MultiplexConnection Cannot Connect to hostslist %s:%s', hostslist, port)
+            raise RuntimeError(r'MultiplexConnection multi step Cannot Connect to hostslist %s:%s', hostslist, port)
     def close(self):
         for soc in self._sockets:
             try:
@@ -141,11 +145,11 @@ def socket_create_connection(address, timeout=10, source_address=None):
         msg = "socket_create_connection returns an empty list"
         try:
             if common.GAE_PREFER == 'http':
-                hosts, timeout, step, shuffle = common.GAE_HTTP, common.GAE_HTTP_TIMEOUT, common.GAE_HTTP_STEP, 1
+                hosts, timeout, step, shuffle = common.GAE_HTTP, common.GAE_HTTP_TIMEOUT, common.GAE_HTTP_STEP, 0
             else:
                 hosts, timeout, step, shuffle = common.GAE_HTTPS, common.GAE_HTTPS_TIMEOUT, common.GAE_HTTPS_STEP, 1
             logging.debug("socket_create_connection connect hostslist: (%r, %r)", hosts, port)
-            conn = MultiplexConnection(hosts[:], port, timeout, step, shuffle)
+            conn = MultiplexConnection(hosts, port, timeout, step, shuffle)
             conn.close()
             sock = conn.socket
             sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, True)
