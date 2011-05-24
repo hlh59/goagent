@@ -16,6 +16,7 @@ import BaseHTTPServer, SocketServer
 import ConfigParser
 import ssl
 import ctypes
+import random
 try:
     import OpenSSL.crypto
     openssl_enabled = True
@@ -83,6 +84,25 @@ class MultiplexConnection(object):
             random_shuffle(hosts)
         self.connect(hosts, port, timeout, step)
     def connect(self, hosts, port, timeout, step):
+        if step == 1:
+            return self.connect1(hosts, port, timeout, step)
+        else:
+            return self.connect2(hosts, port, timeout, step)
+    def connect1(self, hosts, port, timeout, step):
+        for host in hosts:
+            logging.debug("MultiplexConnection single step connect hosts: (%r, %r)", hosts, port)
+            try:
+                sock_family = socket.AF_INET if '.' in host else socket.AF_INET6
+                logging.debug('MultiplexConnection connect_ex (%r, %r)', host, port)
+                sock = socket.socket(sock_family, socket.SOCK_STREAM)
+                sock.connect((host, port))
+                self.socket = sock
+                break
+            except socket.error, e:
+                logging.warning('MultiplexConnection Cannot Connect to hosts %s:%s', host, port)
+        else:
+            raise RuntimeError(r'MultiplexConnection Cannot Connect to hostslist %s:%s', hosts, port)
+    def connect2(self, hosts, port, timeout, step):
         hostslist = [hosts[i:i+step] for i in xrange(0,len(hosts),step)]
         for hosts in hostslist:
             logging.debug("MultiplexConnection multi step connect hosts: (%r, %r)", hosts, port)
@@ -125,13 +145,13 @@ def socket_create_connection(address, timeout=10, source_address=None):
                 hosts, timeout, step, shuffle = common.GAE_HTTPS, common.GAE_HTTPS_TIMEOUT, common.GAE_HTTPS_STEP, 1
             logging.debug("socket_create_connection connect hostslist: (%r, %r)", hosts, port)
             conn = MultiplexConnection(hosts, port, timeout, step, shuffle)
-            #conn.close()
+            conn.close()
             sock = conn.socket
             sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, True)
             return sock
         except socket.error, msg:
             logging.error('socket_create_connection connect fail: (%r, %r)', hosts, port)
-            #conn.close()
+            conn.close()
             sock = None
         if not sock:
             raise socket.error, msg
