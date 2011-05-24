@@ -663,7 +663,7 @@ class ThreadPoolingMixIn(SocketServer.ThreadingMixIn):
     def process_request(self, request, client_address):
         self.queue.put((request, client_address))
         with self.workers_mutex:
-            if self.queue.qsize() > 3 and self.num_workers < self.max_workers:
+            if self.queue.qsize() > 2 and self.num_workers < self.max_workers:
                 self.start_workers(1)
     def join(self):
         self.queue.join()
