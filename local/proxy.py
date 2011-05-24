@@ -80,39 +80,16 @@ class MultiplexConnection(object):
     def __init__(self, hosts, port, timeout, step, shuffle=0):
         self.socket = None
         self._sockets = set([])
+        self.connect(hosts, port, timeout, step, shuffle)
+    def connect(self, hosts, port, timeout, step, shuffle):
         if shuffle:
             hosts = hosts[:]
             random_shuffle(hosts)
-        self.connect(hosts, port, timeout, step)
-    def connect(self, hosts, port, timeout, step):
-        if step == 1:
-            return self.connect1(hosts, port, timeout, step)
-        else:
-            return self.connect2(hosts, port, timeout, step)
-    def connect1(self, hosts, port, timeout, step):
-        for i, host in enumerate(hosts):
-            logging.debug("MultiplexConnection single step connect hosts: (%r, %r)", hosts, port)
-            try:
-                sock_family = socket.AF_INET if '.' in host else socket.AF_INET6
-                logging.debug('MultiplexConnection single step connect_ex (%r, %r)', host, port)
-                sock = socket.socket(sock_family, socket.SOCK_STREAM)
-                sock.settimeout(timeout)
-                sock.connect((host, port))
-                self.socket = sock
-                if i > 0:
-                    hosts[0], hosts[i] == hosts[i], hosts[0]
-                break
-            except socket.error, e:
-                logging.warning('MultiplexConnection single step Cannot Connect to host %s:%s', host, port)
-                continue
-        else:
-            raise RuntimeError(r'MultiplexConnectionsingle step  Cannot Connect to hosts %s:%s', hosts, port)
-    def connect2(self, hosts, port, timeout, step):
-        hostslist = [hosts[i:i+step] for i in xrange(0,len(hosts),step)]
-        for hosts in hostslist:
-            logging.debug("MultiplexConnection multi step connect hosts: (%r, %r)", hosts, port)
+        for i in xrange(0,len(hosts),step):
+            subhosts = hosts[i:i+step]
+            logging.debug("MultiplexConnection multi step connect subhosts: (%r, %r)", subhosts, port)
             socks = []
-            for host in hosts:
+            for host in subhosts:
                 sock_family = socket.AF_INET if '.' in host else socket.AF_INET6
                 sock = socket.socket(sock_family, socket.SOCK_STREAM)
                 sock.setblocking(0)
@@ -125,11 +102,13 @@ class MultiplexConnection(object):
                 self.socket = outs[0]
                 self.socket.setblocking(1)
                 self._sockets.remove(self.socket)
+                if not shuffle and i > 0:
+                    hosts[i:], hosts[:i] = hosts[:i], hosts[i:]
                 break
             else:
-                logging.warning('MultiplexConnection multi step Cannot Connect to hosts %s:%s', hosts, port)
+                logging.warning('MultiplexConnection multi step Cannot Connect to subhosts %s:%s', subhosts, port)
         else:
-            raise RuntimeError(r'MultiplexConnection multi step Cannot Connect to hostslist %s:%s', hostslist, port)
+            raise RuntimeError(r'MultiplexConnection multi step Cannot Connect to hosts %s:%s', hosts, port)
     def close(self):
         for soc in self._sockets:
             try:
@@ -148,7 +127,7 @@ def socket_create_connection(address, timeout=10, source_address=None):
                 hosts, timeout, step, shuffle = common.GAE_HTTP, common.GAE_HTTP_TIMEOUT, common.GAE_HTTP_STEP, 0
             else:
                 hosts, timeout, step, shuffle = common.GAE_HTTPS, common.GAE_HTTPS_TIMEOUT, common.GAE_HTTPS_STEP, 1
-            logging.debug("socket_create_connection connect hostslist: (%r, %r)", hosts, port)
+            logging.debug("socket_create_connection connect hosts: (%r, %r)", hosts, port)
             conn = MultiplexConnection(hosts, port, timeout, step, shuffle)
             conn.close()
             sock = conn.socket
