@@ -47,7 +47,6 @@ class Common(object):
         self.LISTEN_IP         = self.config.get('listen', 'ip')
         self.LISTEN_PORT       = self.config.getint('listen', 'port')
         self.LISTEN_VISIBLE    = self.config.getint('listen', 'visible')
-        self.LISTEN_THREADS    = self.config.getint('listen', 'threads')
         self.LISTEN_DEBUG      = self.config.get('listen', 'debug')
         self.HOSTS             = self.config.items('hosts')
         self.GAE_HOST          = self.config.get('gae', 'host')
@@ -630,32 +629,46 @@ class LocalProxyHandler(ConnectProxyHandler, GaeProxyHandler):
     do_PUT     = GaeProxyHandler.do_PUT
     do_DELETE  = GaeProxyHandler.do_DELETE
 
-class ThreadPoolMixIn(SocketServer.ThreadingMixIn):
-    '''http://code.activestate.com/recipes/574454-thread-pool-mixin-class-for-use-with-socketservert/'''
-    threads_number = getattr(common, 'LISTEN_THREADS', 32)
-    def serve_forever(self):
-        self.requests = Queue.Queue(self.threads_number)
-        for x in xrange(self.threads_number):
-            t = threading.Thread(target = self.process_request_thread)
-            if self.daemon_threads:
-                t.setDaemon(1)
-            t.start()
-        while True:
-            self.handle_request()
-        self.server_close()
-    def process_request_thread(self):
-        while True:
-            SocketServer.ThreadingMixIn.process_request_thread(self, *self.requests.get())
-    def handle_request(self):
-        try:
-            request, client_address = self.get_request()
-        except socket.error, (err, msg):
-            logging.error('socket.error: [%s] %r', err, msg)
-            return
-        if self.verify_request(request, client_address):
-            self.requests.put((request, client_address))
 
-class LocalProxyServer(ThreadPoolMixIn, BaseHTTPServer.HTTPServer):
+class ThreadPoolingMixIn(SocketServer.ThreadingMixIn):
+    __author__ = 'Pavel Uvarov <pavel.uvarov at gmail.com>'
+    def init_thread_pool(self, min_workers = 30, max_workers = 200, min_spare_workers = 10):
+        self.queue = Queue.Queue()
+        self.min_workers = min_workers
+        self.max_workers = max_workers
+        self.min_spare_workers = min_spare_workers
+        self.num_workers = 0
+        self.num_busy_workers = 0
+        self.workers_mutex = threading.Lock()
+        self.start_workers(self.min_workers)
+    def start_workers(self, n):
+        for i in xrange(n):
+            t = threading.Thread(target = self.worker)
+            t.setDaemon(True)
+            t.start()
+    def worker(self):
+        with self.workers_mutex:
+            self.num_workers += 1
+        while True:
+            (request, client_address) = self.queue.get()
+            with self.workers_mutex:
+                self.num_busy_workers += 1
+            self.process_request_thread(request, client_address)
+            self.queue.task_done()
+            with self.workers_mutex:
+                self.num_busy_workers -= 1
+                if self.num_workers - self.num_busy_workers > self.min_spare_workers:
+                    self.num_workers -= 1
+                    return
+    def process_request(self, request, client_address):
+        self.queue.put((request, client_address))
+        with self.workers_mutex:
+            if self.queue.qsize() > 3 and self.num_workers < self.max_workers:
+                self.start_workers(1)
+    def join(self):
+        self.queue.join()
+
+class LocalProxyServer(ThreadPoolingMixIn, BaseHTTPServer.HTTPServer):
     address_family = {True:socket.AF_INET6, False:socket.AF_INET}[':' in common.LISTEN_IP]
     daemon_threads = True
     allow_reuse_address = True
@@ -676,4 +689,5 @@ if __name__ == '__main__':
     if os.name == 'nt' and not common.LISTEN_VISIBLE:
         ctypes.windll.user32.ShowWindow(ctypes.windll.kernel32.GetConsoleWindow(), 0)
     httpd = LocalProxyServer((common.LISTEN_IP, common.LISTEN_PORT), LocalProxyHandler)
+    httpd.init_thread_pool()
     httpd.serve_forever()
