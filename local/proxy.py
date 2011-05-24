@@ -145,7 +145,7 @@ def socket_create_connection(address, timeout=10, source_address=None):
             else:
                 hosts, timeout, step, shuffle = common.GAE_HTTPS, common.GAE_HTTPS_TIMEOUT, common.GAE_HTTPS_STEP, 1
             logging.debug("socket_create_connection connect hostslist: (%r, %r)", hosts, port)
-            conn = MultiplexConnection(hosts, port, timeout, step, shuffle)
+            conn = MultiplexConnection(hosts[:], port, timeout, step, shuffle)
             conn.close()
             sock = conn.socket
             sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, True)
