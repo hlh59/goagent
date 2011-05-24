@@ -159,7 +159,7 @@ def httplib_HTTPSConnection_connect(self):
         self.sock = sock
         self._tunnel()
     self.sock = ssl.wrap_socket(sock, self.key_file, self.cert_file)
-httplib.HTTPSConnection.connect = httplib_HTTPConnection_connect
+httplib.HTTPSConnection.connect = httplib_HTTPSConnection_connect
 
 _httplib_HTTPConnection_putrequest = httplib.HTTPConnection.putrequest
 def httplib_HTTPConnection_putrequest(self, method, url, skip_host=0, skip_accept_encoding=1):
