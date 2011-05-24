@@ -287,10 +287,12 @@ class RootCA(object):
 rootca = RootCA()
 
 def gae_encode_data(dic):
-    return '&'.join('%s=%s' % (k, binascii.b2a_hex(str(v))) for k, v in dic.iteritems())
+    from binascii import b2a_hex
+    return '&'.join('%s=%s' % (k, b2a_hex(str(v))) for k, v in dic.iteritems())
 
 def gae_decode_data(qs):
-    return dict((k, binascii.a2b_hex(v)) for k, v in (x.split('=') for x in qs.split('&')))
+    from binascii import a2b_hex
+    return dict((k, a2b_hex(v)) for k, v in (x.split('=') for x in qs.split('&')))
 
 def build_opener():
     opener = urllib2.build_opener(urllib2.ProxyHandler(common.GAE_PROXY))
