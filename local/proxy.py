@@ -104,7 +104,24 @@ class MultiplexConnection(object):
             except:
                 pass
 
-_socket_create_connection = socket.create_connection
+_GLOBAL_DEFAULT_TIMEOUT = object()
+def _socket_create_connection(address, timeout=_GLOBAL_DEFAULT_TIMEOUT, source_address=None):
+    msg = "getaddrinfo returns an empty list"
+    host, port = address
+    for res in socket.getaddrinfo(host, port, 0, socket.SOCK_STREAM):
+        af, socktype, proto, canonname, sa = res
+        sock = None
+        try:
+            sock = socket.socket(af, socktype, proto)
+            if timeout is not _GLOBAL_DEFAULT_TIMEOUT:
+                sock.settimeout(timeout)
+            sock.connect(sa)
+            return sock
+        except socket.error, msg:
+            if sock is not None:
+                sock.close()
+    raise error, msg
+
 def socket_create_connection(address, timeout=10, source_address=None):
     host, port = address
     logging.debug('socket_create_connection connect (%r, %r)', host, port)
@@ -129,7 +146,20 @@ def socket_create_connection(address, timeout=10, source_address=None):
             raise socket.error, msg
     else:
         return _socket_create_connection(address, timeout)
-socket.create_connection = socket_create_connection
+
+def httplib_HTTPConnection_connect(self):
+    self.sock = socket_create_connection((self.host,self.port), getattr(self, 'timeout', _GLOBAL_DEFAULT_TIMEOUT))
+    if getattr(self, '_tunnel_host', None):
+        self._tunnel()
+httplib.HTTPConnection.connect = httplib_HTTPConnection_connect
+
+def httplib_HTTPSConnection_connect(self):
+    sock = socket_create_connection((self.host,self.port), getattr(self, 'timeout', _GLOBAL_DEFAULT_TIMEOUT))
+    if getattr(self, '_tunnel_host', None):
+        self.sock = sock
+        self._tunnel()
+    self.sock = ssl.wrap_socket(sock, self.key_file, self.cert_file)
+httplib.HTTPSConnection.connect = httplib_HTTPConnection_connect
 
 _httplib_HTTPConnection_putrequest = httplib.HTTPConnection.putrequest
 def httplib_HTTPConnection_putrequest(self, method, url, skip_host=0, skip_accept_encoding=1):
