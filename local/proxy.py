@@ -104,6 +104,7 @@ class MultiplexConnection(object):
             except:
                 pass
 
+
 _GLOBAL_DEFAULT_TIMEOUT = object()
 def _socket_create_connection(address, timeout=_GLOBAL_DEFAULT_TIMEOUT, source_address=None):
     msg = "getaddrinfo returns an empty list"
@@ -122,39 +123,44 @@ def _socket_create_connection(address, timeout=_GLOBAL_DEFAULT_TIMEOUT, source_a
                 sock.close()
     raise error, msg
 
-def socket_create_connection(address, timeout=10, source_address=None):
+if sys.version_info >= (2, 6):
+    socket_create_connection = socket.create_connection
+else:
+    socket_create_connection = _socket_create_connection
+
+def socket_create_connection2(address, timeout=10, source_address=None):
     host, port = address
-    logging.debug('socket_create_connection connect (%r, %r)', host, port)
+    logging.debug('socket_create_connection2 connect (%r, %r)', host, port)
     if host.endswith('.appspot.com'):
-        msg = "socket_create_connection returns an empty list"
+        msg = "socket_create_connection2 returns an empty list"
         try:
             if common.GAE_PREFER == 'http':
                 hosts, timeout, step, shuffle = common.GAE_HTTP, common.GAE_HTTP_TIMEOUT, common.GAE_HTTP_STEP, 0
             else:
                 hosts, timeout, step, shuffle = common.GAE_HTTPS, common.GAE_HTTPS_TIMEOUT, common.GAE_HTTPS_STEP, 1
-            logging.debug("socket_create_connection connect hostslist: (%r, %r)", hosts, port)
+            logging.debug("socket_create_connection2 connect hostslist: (%r, %r)", hosts, port)
             conn = MultiplexConnection(hosts, port, timeout, step, shuffle)
             #conn.close()
             sock = conn.socket
             #sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, True)
             return sock
         except socket.error, msg:
-            logging.error('socket_create_connection connect fail: (%r, %r)', hosts, port)
+            logging.error('socket_create_connection2 connect fail: (%r, %r)', hosts, port)
             #conn.close()
             sock = None
         if not sock:
             raise socket.error, msg
     else:
-        return _socket_create_connection(address, timeout)
+        return socket_create_connection(address, timeout)
 
 def httplib_HTTPConnection_connect(self):
-    self.sock = socket_create_connection((self.host,self.port), getattr(self, 'timeout', _GLOBAL_DEFAULT_TIMEOUT))
+    self.sock = socket_create_connection2((self.host,self.port), getattr(self, 'timeout', _GLOBAL_DEFAULT_TIMEOUT))
     if getattr(self, '_tunnel_host', None):
         self._tunnel()
 httplib.HTTPConnection.connect = httplib_HTTPConnection_connect
 
 def httplib_HTTPSConnection_connect(self):
-    sock = socket_create_connection((self.host,self.port), getattr(self, 'timeout', _GLOBAL_DEFAULT_TIMEOUT))
+    sock = socket_create_connection2((self.host,self.port), getattr(self, 'timeout', _GLOBAL_DEFAULT_TIMEOUT))
     if getattr(self, '_tunnel_host', None):
         self.sock = sock
         self._tunnel()
