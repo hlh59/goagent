@@ -135,7 +135,7 @@ def socket_create_connection2(address, timeout=10, source_address=None):
         msg = "socket_create_connection2 returns an empty list"
         try:
             if common.GAE_PREFER == 'http':
-                hosts, timeout, step, shuffle = common.GAE_HTTP, common.GAE_HTTP_TIMEOUT, common.GAE_HTTP_STEP, 0
+                hosts, timeout, step, shuffle = common.GAE_HTTP, common.GAE_HTTP_TIMEOUT, common.GAE_HTTP_STEP, 1
             else:
                 hosts, timeout, step, shuffle = common.GAE_HTTPS, common.GAE_HTTPS_TIMEOUT, common.GAE_HTTPS_STEP, 1
             logging.debug("socket_create_connection2 connect hostslist: (%r, %r)", hosts, port)
