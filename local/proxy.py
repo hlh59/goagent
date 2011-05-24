@@ -684,7 +684,6 @@ if __name__ == '__main__':
     print 'GAE Servers  : %s' % common.GAE_HOST
     if common.GAE_BINDHOSTS:
         print 'GAE BindHost : %s' % common.GAE_BINDHOSTS
-    print 'Threads Size : %d' % common.LISTEN_THREADS
     print '--------------------------------------------'
     if os.name == 'nt' and not common.LISTEN_VISIBLE:
         ctypes.windll.user32.ShowWindow(ctypes.windll.kernel32.GetConsoleWindow(), 0)
