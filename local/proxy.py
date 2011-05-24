@@ -16,7 +16,6 @@ import BaseHTTPServer, SocketServer
 import ConfigParser
 import ssl
 import ctypes
-import random
 try:
     import OpenSSL.crypto
     openssl_enabled = True
@@ -25,6 +24,15 @@ except ImportError:
 
 __version__ = 'beta'
 __author__ =  'phus.lu@gmail.com'
+
+def random_choice(seq):
+    return seq[int(ord(os.urandom(1))/256.0*len(seq))]
+
+def random_shuffle(seq):
+    from os import urandom
+    for i in reversed(xrange(1, len(seq))):
+        j = int(ord(urandom(1))/256.0 * (i+1))
+        seq[i], seq[j] = seq[j], seq[i]
 
 class Common(object):
     '''global config module, based on GappProxy 2.0.0'''
@@ -53,7 +61,7 @@ class Common(object):
         self.GAE_HTTPS_TIMEOUT   = self.config.getint('gae', 'https_timeout')
         self.GAE_HTTPS_STEP      = self.config.getint('gae', 'https_step')
         self.GAE_PROXY           = dict(re.match(r'^(\w+)://(\S+)$', proxy.strip()).group(1, 2) for proxy in self.config.get('gae', 'proxy').split('|')) if self.config.has_option('gae', 'proxy') else {}
-        self.GAE_BINDHOSTS       = dict((host, self.GAE_HOSTS[int(ord(os.urandom(1))/256.0*len(self.GAE_HOSTS))]) for host in self.config.get('gae', 'bindhosts').split('|')) if self.config.has_option('gae', 'bindhosts') else {}
+        self.GAE_BINDHOSTS       = dict((host, random_choice(self.GAE_HOSTS)) for host in self.config.get('gae', 'bindhosts').split('|')) if self.config.has_option('gae', 'bindhosts') else {}
 
     def select_gaehost(self, url):
         gaehost = None
@@ -61,7 +69,7 @@ class Common(object):
             return self.GAE_HOSTS[0]
         if self.GAE_BINDHOSTS:
             gaehost = self.GAE_BINDHOSTS.get(urlparse.urlsplit(url)[1])
-        gaehost = gaehost or self.GAE_HOSTS[int(ord(os.urandom(1))/256.0*len(self.GAE_HOSTS))]
+        gaehost = gaehost or random_choice(self.GAE_HOSTS)
         return gaehost
 
 common = Common()
@@ -72,7 +80,7 @@ class MultiplexConnection(object):
         self.socket = None
         self._sockets = set([])
         if shuffle:
-            random.shuffle(hosts)
+            random_shuffle(hosts)
         self.connect(hosts, port, timeout, step)
     def connect(self, hosts, port, timeout, step):
         hostslist = [hosts[i:i+step] for i in xrange(0,len(hosts),step)]
