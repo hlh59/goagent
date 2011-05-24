@@ -16,7 +16,7 @@ import BaseHTTPServer, SocketServer
 import ConfigParser
 import ssl
 import ctypes
-import random
+import threading, Queue
 try:
     import OpenSSL.crypto
     openssl_enabled = True
@@ -47,22 +47,23 @@ class Common(object):
         self.LISTEN_IP         = self.config.get('listen', 'ip')
         self.LISTEN_PORT       = self.config.getint('listen', 'port')
         self.LISTEN_VISIBLE    = self.config.getint('listen', 'visible')
+        self.LISTEN_THREADS    = self.config.getint('listen', 'threads')
         self.LISTEN_DEBUG      = self.config.get('listen', 'debug')
+        self.HOSTS             = self.config.items('hosts')
+        self.GAE_HOST          = self.config.get('gae', 'host')
+        self.GAE_PASSWORD      = self.config.get('gae', 'password').strip()
+        self.GAE_HOSTS         = self.GAE_HOST.split('|')
+        self.GAE_PATH          = self.config.get('gae', 'path')
+        self.GAE_PREFER        = self.config.get('gae', 'prefer')
+        self.GAE_HTTP          = self.config.get('gae', 'http').split('|')
+        self.GAE_HTTP_TIMEOUT  = self.config.getint('gae', 'http_timeout')
+        self.GAE_HTTP_STEP     = self.config.getint('gae', 'http_step')
+        self.GAE_HTTPS         = self.config.get('gae', 'https').split('|')
+        self.GAE_HTTPS_TIMEOUT = self.config.getint('gae', 'https_timeout')
+        self.GAE_HTTPS_STEP    = self.config.getint('gae', 'https_step')
+        self.GAE_PROXY         = dict(re.match(r'^(\w+)://(\S+)$', proxy.strip()).group(1, 2) for proxy in self.config.get('gae', 'proxy').split('|')) if self.config.has_option('gae', 'proxy') else {}
+        self.GAE_BINDHOSTS     = dict((host, random_choice(self.GAE_HOSTS)) for host in self.config.get('gae', 'bindhosts').split('|')) if self.config.has_option('gae', 'bindhosts') else {}
         logging.basicConfig(level=getattr(logging, self.LISTEN_DEBUG), format='%(levelname)s - - %(asctime)s %(message)s', datefmt='[%d/%b/%Y %H:%M:%S]')
-        self.HOSTS               = self.config.items('hosts')
-        self.GAE_HOST            = self.config.get('gae', 'host')
-        self.GAE_PASSWORD        = self.config.get('gae', 'password').strip()
-        self.GAE_HOSTS           = self.GAE_HOST.split('|')
-        self.GAE_PATH            = self.config.get('gae', 'path')
-        self.GAE_PREFER          = self.config.get('gae', 'prefer')
-        self.GAE_HTTP            = self.config.get('gae', 'http').split('|')
-        self.GAE_HTTP_TIMEOUT    = self.config.getint('gae', 'http_timeout')
-        self.GAE_HTTP_STEP       = self.config.getint('gae', 'http_step')
-        self.GAE_HTTPS           = self.config.get('gae', 'https').split('|')
-        self.GAE_HTTPS_TIMEOUT   = self.config.getint('gae', 'https_timeout')
-        self.GAE_HTTPS_STEP      = self.config.getint('gae', 'https_step')
-        self.GAE_PROXY           = dict(re.match(r'^(\w+)://(\S+)$', proxy.strip()).group(1, 2) for proxy in self.config.get('gae', 'proxy').split('|')) if self.config.has_option('gae', 'proxy') else {}
-        self.GAE_BINDHOSTS       = dict((host, random_choice(self.GAE_HOSTS)) for host in self.config.get('gae', 'bindhosts').split('|')) if self.config.has_option('gae', 'bindhosts') else {}
 
     def select_gaehost(self, url):
         gaehost = None
@@ -102,7 +103,7 @@ class MultiplexConnection(object):
                 self.socket = outs[0]
                 self.socket.setblocking(1)
                 self._sockets.remove(self.socket)
-                if not shuffle and i > 0:
+                if i > 0:
                     hosts[i:], hosts[:i] = hosts[:i], hosts[i:]
                 break
             else:
@@ -629,9 +630,35 @@ class LocalProxyHandler(ConnectProxyHandler, GaeProxyHandler):
     do_PUT     = GaeProxyHandler.do_PUT
     do_DELETE  = GaeProxyHandler.do_DELETE
 
-class LocalProxyServer(SocketServer.ThreadingMixIn, BaseHTTPServer.HTTPServer):
+class ThreadPoolMixIn(SocketServer.ThreadingMixIn):
+    '''http://code.activestate.com/recipes/574454-thread-pool-mixin-class-for-use-with-socketservert/'''
+    threads_number = getattr(common, 'LISTEN_THREADS', 32)
+    def serve_forever(self):
+        self.requests = Queue.Queue(self.threads_number)
+        for x in xrange(self.threads_number):
+            t = threading.Thread(target = self.process_request_thread)
+            if self.daemon_threads:
+                t.setDaemon(1)
+            t.start()
+        while True:
+            self.handle_request()
+        self.server_close()
+    def process_request_thread(self):
+        while True:
+            SocketServer.ThreadingMixIn.process_request_thread(self, *self.requests.get())
+    def handle_request(self):
+        try:
+            request, client_address = self.get_request()
+        except socket.error, (err, msg):
+            logging.error('socket.error: [%s] %r', err, msg)
+            return
+        if self.verify_request(request, client_address):
+            self.requests.put((request, client_address))
+
+class LocalProxyServer(ThreadPoolMixIn, BaseHTTPServer.HTTPServer):
     address_family = {True:socket.AF_INET6, False:socket.AF_INET}[':' in common.LISTEN_IP]
     daemon_threads = True
+    allow_reuse_address = True
 
 if __name__ == '__main__':
     '''show current config'''
@@ -644,6 +671,7 @@ if __name__ == '__main__':
     print 'GAE Servers  : %s' % common.GAE_HOST
     if common.GAE_BINDHOSTS:
         print 'GAE BindHost : %s' % common.GAE_BINDHOSTS
+    print 'Threads Size : %d' % common.LISTEN_THREADS
     print '--------------------------------------------'
     if os.name == 'nt' and not common.LISTEN_VISIBLE:
         ctypes.windll.user32.ShowWindow(ctypes.windll.kernel32.GetConsoleWindow(), 0)
