@@ -86,14 +86,14 @@ class MultiplexConnection(object):
             hosts = hosts[:]
             random_shuffle(hosts)
         for i in xrange(0,len(hosts),step):
-            subhosts = hosts[i:i+step]
-            logging.debug("MultiplexConnection multi step connect subhosts: (%r, %r)", subhosts, port)
+            logging.debug('MultiplexConnection connect hosts[%d:%d+%d]', i, i, step)
             socks = []
-            for host in subhosts:
+            for j in xrange(i, i+step):
+                host = hosts[i]
                 sock_family = socket.AF_INET if '.' in host else socket.AF_INET6
                 sock = socket.socket(sock_family, socket.SOCK_STREAM)
                 sock.setblocking(0)
-                logging.debug('MultiplexConnection multi step connect_ex (%r, %r)', host, port)
+                logging.debug('MultiplexConnection connect_ex (%r, %r)', host, port)
                 err = sock.connect_ex((host, port))
                 self._sockets.add(sock)
                 socks.append(sock)
@@ -106,9 +106,9 @@ class MultiplexConnection(object):
                     hosts[i:], hosts[:i] = hosts[:i], hosts[i:]
                 break
             else:
-                logging.warning('MultiplexConnection multi step Cannot Connect to subhosts %s:%s', subhosts, port)
+                logging.warning('MultiplexConnection Cannot Connect to hosts[%d:%d+%d]', i, i, step)
         else:
-            raise RuntimeError(r'MultiplexConnection multi step Cannot Connect to hosts %s:%s', hosts, port)
+            raise RuntimeError(r'MultiplexConnection Cannot Connect to hosts %s:%s', hosts, port)
     def close(self):
         for soc in self._sockets:
             try:
