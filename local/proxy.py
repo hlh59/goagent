@@ -30,7 +30,7 @@ def random_choice(seq):
 
 def random_shuffle(seq):
     from os import urandom
-    for i in reversed(xrange(1, len(seq))):
+    for i in xrange(len(seq)-1, 1, -1):
         j = int(ord(urandom(1))/256.0 * (i+1))
         seq[i], seq[j] = seq[j], seq[i]
 
