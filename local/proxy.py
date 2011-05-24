@@ -95,6 +95,7 @@ class MultiplexConnection(object):
                 sock_family = socket.AF_INET if '.' in host else socket.AF_INET6
                 logging.debug('MultiplexConnection connect_ex (%r, %r)', host, port)
                 sock = socket.socket(sock_family, socket.SOCK_STREAM)
+                sock.settimeout(timeout)
                 sock.connect((host, port))
                 self.socket = sock
                 break
