@@ -65,6 +65,23 @@ class Common(object):
         self.GAE_PROXY         = dict(re.match(r'^(\w+)://(\S+)$', proxy.strip()).group(1, 2) for proxy in self.config.get('gae', 'proxy').split('|')) if self.config.has_option('gae', 'proxy') else {}
         self.GAE_BINDHOSTS     = dict((host, random_choice(self.GAE_HOSTS)) for host in self.config.get('gae', 'bindhosts').split('|')) if self.config.has_option('gae', 'bindhosts') else {}
         logging.basicConfig(level=getattr(logging, self.LISTEN_DEBUG), format='%(levelname)s - - %(asctime)s %(message)s', datefmt='[%d/%b/%Y %H:%M:%S]')
+        self.expand_gaedomain()
+
+    def expand_gaedomain(self):
+        def expand(hosts):
+            hostlist = []
+            for host in hosts:
+                if re.search('[a-zA-Z]', host):
+                    try:
+                        hostlist += [x[-1][0] for x in socket.getaddrinfo(host, 80)]
+                    except socket.gaierror, err:
+                        logging.error('socket.getaddrinfo %r error, %s', host, err)
+                else:
+                    hostlist.append(host)
+            return hostlist
+        self.GAE_HTTP = expand(self.GAE_HTTP)
+        self.GAE_HTTPS = expand(self.GAE_HTTPS)
+        self.HOSTS = [(hostpat, '|'.join(expand(hosts.split('|')))) for hostpat, hosts in self.HOSTS]
 
     def select_gaehost(self, url):
         gaehost = None
