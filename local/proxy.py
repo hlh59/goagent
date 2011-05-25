@@ -668,7 +668,7 @@ class ThreadPoolingMixIn(SocketServer.ThreadingMixIn):
     def join(self):
         self.queue.join()
 
-class LocalProxyServer(ThreadPoolingMixIn, BaseHTTPServer.HTTPServer):
+class LocalProxyServer(SocketServer.ThreadingMixIn, BaseHTTPServer.HTTPServer):
     address_family = {True:socket.AF_INET6, False:socket.AF_INET}[':' in common.LISTEN_IP]
     daemon_threads = True
     allow_reuse_address = True
