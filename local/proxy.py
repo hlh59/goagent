@@ -126,7 +126,7 @@ def socket_create_connection(address, timeout=10, source_address=None):
             if common.GAE_PREFER == 'http':
                 hosts, timeout, step, shuffle = common.GAE_HTTP, common.GAE_HTTP_TIMEOUT, common.GAE_HTTP_STEP, 0
             else:
-                hosts, timeout, step, shuffle = common.GAE_HTTPS, common.GAE_HTTPS_TIMEOUT, common.GAE_HTTPS_STEP, 1
+                hosts, timeout, step, shuffle = common.GAE_HTTPS, common.GAE_HTTPS_TIMEOUT, common.GAE_HTTPS_STEP, 0
             logging.debug("socket_create_connection connect hosts: (%r, %r)", hosts, port)
             conn = MultiplexConnection(hosts, port, timeout, step, shuffle)
             conn.close()
@@ -464,7 +464,7 @@ class ConnectProxyHandler(BaseHTTPServer.BaseHTTPRequestHandler):
             else:
                 hosts = [x[-1][0] for x in socket.getaddrinfo(host, port)]
             self.log_message('ConnectProxyHandler MultiplexConnection to %s with %d hosts' % (self.path, len(hosts)))
-            conn = MultiplexConnection(hosts, port, timeout, step)
+            conn = MultiplexConnection(hosts, port, timeout, step, 0)
             if conn.socket is None:
                 return self.send_error(502, 'Cannot Connect to %s:%s' % (hosts, port))
             self.log_request(200)
