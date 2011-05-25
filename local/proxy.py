@@ -57,9 +57,11 @@ class Common(object):
         self.GAE_HTTP          = self.config.get('gae', 'http').split('|')
         self.GAE_HTTP_TIMEOUT  = self.config.getint('gae', 'http_timeout')
         self.GAE_HTTP_STEP     = self.config.getint('gae', 'http_step')
+        self.GAE_HTTP_SHUFFLE  = self.config.getint('gae', 'http_shuffle')
         self.GAE_HTTPS         = self.config.get('gae', 'https').split('|')
         self.GAE_HTTPS_TIMEOUT = self.config.getint('gae', 'https_timeout')
         self.GAE_HTTPS_STEP    = self.config.getint('gae', 'https_step')
+        self.GAE_HTTPS_SHUFFLE = self.config.getint('gae', 'https_shuffle')
         self.GAE_PROXY         = dict(re.match(r'^(\w+)://(\S+)$', proxy.strip()).group(1, 2) for proxy in self.config.get('gae', 'proxy').split('|')) if self.config.has_option('gae', 'proxy') else {}
         self.GAE_BINDHOSTS     = dict((host, random_choice(self.GAE_HOSTS)) for host in self.config.get('gae', 'bindhosts').split('|')) if self.config.has_option('gae', 'bindhosts') else {}
         logging.basicConfig(level=getattr(logging, self.LISTEN_DEBUG), format='%(levelname)s - - %(asctime)s %(message)s', datefmt='[%d/%b/%Y %H:%M:%S]')
@@ -97,7 +99,7 @@ class MultiplexConnection(object):
         if shuffle:
             hosts = hosts[:]
             random_shuffle(hosts)
-        for i in xrange(0,len(hosts),step):
+        for i in xrange(0, len(hosts), step):
             logging.debug('MultiplexConnection connect hosts[%d:%d+%d]', i, i, step)
             socks = []
             for j in xrange(i, i+step):
@@ -114,11 +116,11 @@ class MultiplexConnection(object):
                 self.socket = outs[0]
                 self.socket.setblocking(1)
                 self._sockets.remove(self.socket)
-                if i > 0:
+                if not shuffle and i > 0:
                     hosts[i:], hosts[:i] = hosts[:i], hosts[i:]
                 break
             else:
-                logging.warning('MultiplexConnection Cannot Connect to hosts[%d:%d+%d]', i, i, step)
+                logging.warning('MultiplexConnection Cannot Connect to %r', hosts[i:i+step])
         else:
             raise RuntimeError(r'MultiplexConnection Cannot Connect to hosts %s:%s', hosts, port)
     def close(self):
@@ -136,9 +138,9 @@ def socket_create_connection(address, timeout=10, source_address=None):
         msg = "socket_create_connection returns an empty list"
         try:
             if common.GAE_PREFER == 'http':
-                hosts, timeout, step, shuffle = common.GAE_HTTP, common.GAE_HTTP_TIMEOUT, common.GAE_HTTP_STEP, 0
+                hosts, timeout, step, shuffle = common.GAE_HTTP, common.GAE_HTTP_TIMEOUT, common.GAE_HTTP_STEP, common.GAE_HTTP_SHUFFLE
             else:
-                hosts, timeout, step, shuffle = common.GAE_HTTPS, common.GAE_HTTPS_TIMEOUT, common.GAE_HTTPS_STEP, 0
+                hosts, timeout, step, shuffle = common.GAE_HTTPS, common.GAE_HTTPS_TIMEOUT, common.GAE_HTTPS_STEP, common.GAE_HTTPS_SHUFFLE
             logging.debug("socket_create_connection connect hosts: (%r, %r)", hosts, port)
             conn = MultiplexConnection(hosts, port, timeout, step, shuffle)
             conn.close()
@@ -464,11 +466,11 @@ class ConnectProxyHandler(BaseHTTPServer.BaseHTTPRequestHandler):
         # BUT, sometimes this script is running in Linux/MAC...
         for hostpat, hosts in common.HOSTS:
             if host.endswith(hostpat):
-                return self._direct(host, port, hosts, timeout=4, step=4)
+                return self._direct(host, port, hosts, timeout=common.GAE_HTTPS_TIMEOUT, step=common.GAE_HTTPS_STEP, shuffle=common.GAE_HTTPS_SHUFFLE)
         else:
             return self._forward()
 
-    def _direct(self, host, port, hosts, timeout, step):
+    def _direct(self, host, port, hosts, timeout, step, shuffle):
         DIRECT_KEEPLIVE = 60
         DIRECT_TICK = 2
         try:
@@ -478,7 +480,7 @@ class ConnectProxyHandler(BaseHTTPServer.BaseHTTPRequestHandler):
             else:
                 hosts = [x[-1][0] for x in socket.getaddrinfo(host, port)]
             self.log_message('ConnectProxyHandler MultiplexConnection to %s with %d hosts' % (self.path, len(hosts)))
-            conn = MultiplexConnection(hosts, port, timeout, step, 0)
+            conn = MultiplexConnection(hosts, port, timeout, step, shuffle)
             if conn.socket is None:
                 return self.send_error(502, 'Cannot Connect to %s:%s' % (hosts, port))
             self.log_request(200)
