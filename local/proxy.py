@@ -73,6 +73,18 @@ class Common(object):
         gaehost = gaehost or random_choice(self.GAE_HOSTS)
         return gaehost
 
+    def show(self):
+        print '--------------------------------------------'
+        print 'OpenSSL Mode : %s' % {True:'Enabled', False:'Disabled'}[openssl_enabled]
+        print 'Listen Addr  : %s:%d' % (self.LISTEN_IP, self.LISTEN_PORT)
+        if self.GAE_PROXY:
+            print 'Local Proxy  : %s' % self.GAE_PROXY
+        print 'GAE Mode     : %s' % self.GAE_PREFER
+        print 'GAE Servers  : %s' % self.GAE_HOST
+        if self.GAE_BINDHOSTS:
+            print 'GAE BindHost : %s' % self.GAE_BINDHOSTS
+        print '--------------------------------------------'
+
 common = Common()
 
 class MultiplexConnection(object):
@@ -305,6 +317,7 @@ class GaeProxyHandler(BaseHTTPServer.BaseHTTPRequestHandler):
                 # www.google.cn:80 is down, switch to https
                 if e.code == 502 or e.code == 504:
                     common.GAE_PREFER = 'https'
+                    common.show()
                 errors.append('%d: %s' % (e.code, httplib.responses.get(e.code, 'Unknown HTTPError')))
                 continue
             except urllib2.URLError, e:
@@ -312,6 +325,7 @@ class GaeProxyHandler(BaseHTTPServer.BaseHTTPRequestHandler):
                     # it seems that google.cn is reseted, switch to https
                     if e.reason[0] == 10054:
                         common.GAE_PREFER = 'https'
+                        common.show()
                 errors.append(str(e))
                 continue
             except Exception, e:
@@ -629,62 +643,13 @@ class LocalProxyHandler(ConnectProxyHandler, GaeProxyHandler):
     do_PUT     = GaeProxyHandler.do_PUT
     do_DELETE  = GaeProxyHandler.do_DELETE
 
-
-class ThreadPoolingMixIn(SocketServer.ThreadingMixIn):
-    __author__ = 'Pavel Uvarov <pavel.uvarov at gmail.com>'
-    def init_thread_pool(self, min_workers = 30, max_workers = 200, min_spare_workers = 10):
-        self.queue = Queue.Queue()
-        self.min_workers = min_workers
-        self.max_workers = max_workers
-        self.min_spare_workers = min_spare_workers
-        self.num_workers = 0
-        self.num_busy_workers = 0
-        self.workers_mutex = threading.Lock()
-        self.start_workers(self.min_workers)
-    def start_workers(self, n):
-        for i in xrange(n):
-            t = threading.Thread(target = self.worker)
-            t.setDaemon(True)
-            t.start()
-    def worker(self):
-        with self.workers_mutex:
-            self.num_workers += 1
-        while True:
-            (request, client_address) = self.queue.get()
-            with self.workers_mutex:
-                self.num_busy_workers += 1
-            self.process_request_thread(request, client_address)
-            self.queue.task_done()
-            with self.workers_mutex:
-                self.num_busy_workers -= 1
-                if self.num_workers - self.num_busy_workers > self.min_spare_workers:
-                    self.num_workers -= 1
-                    return
-    def process_request(self, request, client_address):
-        self.queue.put((request, client_address))
-        with self.workers_mutex:
-            if self.queue.qsize() > 2 and self.num_workers < self.max_workers:
-                self.start_workers(1)
-    def join(self):
-        self.queue.join()
-
 class LocalProxyServer(SocketServer.ThreadingMixIn, BaseHTTPServer.HTTPServer):
     address_family = {True:socket.AF_INET6, False:socket.AF_INET}[':' in common.LISTEN_IP]
     daemon_threads = True
     allow_reuse_address = True
 
 if __name__ == '__main__':
-    '''show current config'''
-    print '--------------------------------------------'
-    print 'OpenSSL Mode : %s' % {True:'Enabled', False:'Disabled'}[openssl_enabled]
-    print 'Listen Addr  : %s:%d' % (common.LISTEN_IP, common.LISTEN_PORT)
-    if common.GAE_PROXY:
-        print 'Local Proxy  : %s' % common.GAE_PROXY
-    print 'GAE Mode     : %s' % common.GAE_PREFER
-    print 'GAE Servers  : %s' % common.GAE_HOST
-    if common.GAE_BINDHOSTS:
-        print 'GAE BindHost : %s' % common.GAE_BINDHOSTS
-    print '--------------------------------------------'
+    common.show()
     if os.name == 'nt' and not common.LISTEN_VISIBLE:
         ctypes.windll.user32.ShowWindow(ctypes.windll.kernel32.GetConsoleWindow(), 0)
     httpd = LocalProxyServer((common.LISTEN_IP, common.LISTEN_PORT), LocalProxyHandler)
