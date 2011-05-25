@@ -688,5 +688,5 @@ if __name__ == '__main__':
     if os.name == 'nt' and not common.LISTEN_VISIBLE:
         ctypes.windll.user32.ShowWindow(ctypes.windll.kernel32.GetConsoleWindow(), 0)
     httpd = LocalProxyServer((common.LISTEN_IP, common.LISTEN_PORT), LocalProxyHandler)
-    httpd.init_thread_pool()
+    #httpd.init_thread_pool()
     httpd.serve_forever()
