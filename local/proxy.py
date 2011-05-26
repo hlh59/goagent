@@ -69,13 +69,13 @@ class Common(object):
 
     def expand_gaedomain(self):
         def expand(hosts):
-            hostlist = []
+            hostset = set([])
             for host in hosts:
                 try:
-                    hostlist += [x[-1][0] for x in socket.getaddrinfo(host, 80)]
+                    hostset.update([x[-1][0] for x in socket.getaddrinfo(host, 80)])
                 except socket.gaierror, err:
                     logging.error('socket.getaddrinfo %r error, %s', host, err)
-            return hostlist
+            return list(hostset)
         self.GAE_HTTP = expand(self.GAE_HTTP)
         self.GAE_HTTPS = expand(self.GAE_HTTPS)
         self.HOSTS = [(hostpat, '|'.join(expand(hosts.split('|')))) for hostpat, hosts in self.HOSTS]
