@@ -34,7 +34,7 @@ import logging
 
 #logging.basicConfig(level=logging.DEBUG, format='%(levelname)s - - %(asctime)s %(message)s', datefmt='[%d/%b/%Y %H:%M:%S]')
 
-GOOGL_IP_LIST = '''
+GOOGLE_IP_LIST = '''
 203.208.46.22
 203.208.37.22
 203.208.39.22
@@ -56,15 +56,16 @@ class MultiplexConnection(object):
     def __init__(self, hosts, port, timeout, step, shuffle=0):
         self.socket = None
         self._sockets = set([])
+        self.connect(hosts, port, timeout, step, shuffle)
+    def connect(self, hosts, port, timeout, step, shuffle):
         if shuffle:
-            random.shuffle(hosts)
-        self.connect(hosts, port, timeout, step)
-    def connect(self, hosts, port, timeout, step):
-        hostslist = [hosts[i:i+step] for i in xrange(0,len(hosts),step)]
-        for hosts in hostslist:
-            logging.debug("MultiplexConnection multi step connect hosts: (%r, %r)", hosts, port)
+            hosts = hosts[:]
+            random_shuffle(hosts)
+        for i in xrange(0, len(hosts), step):
+            logging.debug('MultiplexConnection connect hosts[%d:%d+%d]', i, i, step)
             socks = []
-            for host in hosts:
+            for j in xrange(i, i+step):
+                host = hosts[i]
                 sock_family = socket.AF_INET if '.' in host else socket.AF_INET6
                 sock = socket.socket(sock_family, socket.SOCK_STREAM)
                 sock.setblocking(0)
@@ -77,11 +78,13 @@ class MultiplexConnection(object):
                 self.socket = outs[0]
                 self.socket.setblocking(1)
                 self._sockets.remove(self.socket)
+                if not shuffle and i > 0:
+                    hosts[i:], hosts[:i] = hosts[:i], hosts[i:]
                 break
             else:
-                logging.warning('MultiplexConnection Cannot Connect to hosts %s:%s', hosts, port)
+                logging.warning('MultiplexConnection Cannot Connect to %r', hosts[i:i+step])
         else:
-            raise RuntimeError(r'MultiplexConnection Cannot Connect to hostslist %s:%s', hostslist, port)
+            raise RuntimeError(r'MultiplexConnection Cannot Connect to hosts %s:%s', hosts, port)
     def close(self):
         for soc in self._sockets:
             try:
@@ -93,25 +96,26 @@ _socket_create_connection = socket.create_connection
 def socket_create_connection(address, timeout=10, source_address=None):
     host, port = address
     logging.debug('socket_create_connection connect (%r, %r)', host, port)
-    if host.endswith(('google.com','.appspot.com')):
+    if host.endswith('.appspot.com'):
         msg = "socket_create_connection returns an empty list"
         try:
-            hosts, timeout, step, shuffle = GOOGL_IP_LIST, 4, 4, 0
-            logging.debug("socket_create_connection connect hostslist: (%r, %r)", hosts, port)
+            hosts, timeout, step, shuffle = GOOGLE_IP_LIST, 5, 16, 1
+            logging.debug("socket_create_connection connect hosts: (%r, %r)", hosts, port)
             conn = MultiplexConnection(hosts, port, timeout, step, shuffle)
-            #conn.close()
+            conn.close()
             sock = conn.socket
             sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, True)
             return sock
         except socket.error, msg:
             logging.error('socket_create_connection connect fail: (%r, %r)', hosts, port)
-            #conn.close()
+            conn.close()
             sock = None
         if not sock:
             raise socket.error, msg
     else:
         return _socket_create_connection(address, timeout)
 socket.create_connection = socket_create_connection
+
 fancy_urllib._create_connection = socket_create_connection
 fancy_urllib.create_fancy_connection.PresetProxyHTTPSConnection = httplib.HTTPSConnection
 
