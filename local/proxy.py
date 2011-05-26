@@ -71,13 +71,10 @@ class Common(object):
         def expand(hosts):
             hostlist = []
             for host in hosts:
-                if re.search('[a-zA-Z]', host):
-                    try:
-                        hostlist += [x[-1][0] for x in socket.getaddrinfo(host, 80)]
-                    except socket.gaierror, err:
-                        logging.error('socket.getaddrinfo %r error, %s', host, err)
-                else:
-                    hostlist.append(host)
+                try:
+                    hostlist += [x[-1][0] for x in socket.getaddrinfo(host, 80)]
+                except socket.gaierror, err:
+                    logging.error('socket.getaddrinfo %r error, %s', host, err)
             return hostlist
         self.GAE_HTTP = expand(self.GAE_HTTP)
         self.GAE_HTTPS = expand(self.GAE_HTTPS)
