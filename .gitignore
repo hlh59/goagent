@@ -1,4 +1,2 @@
 *.pyc
 *.pyo
-local/.gacert/*
-local/ssl/serial

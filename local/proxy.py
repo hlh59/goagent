@@ -184,7 +184,7 @@ class RootCA(object):
     def __init__(self):
         #homedir = os.environ['USERPROFILE' if os.name == 'nt' else 'HOME']
         homedir = os.path.dirname(__file__)
-        self.cert_dir = os.path.join(homedir, '.gacert')
+        self.cert_dir = os.path.join(homedir, 'certs')
         try:
             self.checkCA()
         except:
