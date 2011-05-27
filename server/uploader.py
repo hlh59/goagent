@@ -96,7 +96,7 @@ _socket_create_connection = socket.create_connection
 def socket_create_connection(address, timeout=10, source_address=None):
     host, port = address
     logging.debug('socket_create_connection connect (%r, %r)', host, port)
-    if host.endswith('.appspot.com'):
+    if host.endswith(('.google.com', '.appspot.com')):
         msg = "socket_create_connection returns an empty list"
         try:
             hosts, timeout, step, shuffle = GOOGLE_IP_LIST, 5, 16, 1
