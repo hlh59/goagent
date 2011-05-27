@@ -49,9 +49,9 @@ class Common(object):
         self.LISTEN_VISIBLE    = self.config.getint('listen', 'visible')
         self.LISTEN_DEBUG      = self.config.get('listen', 'debug')
         self.HOSTS             = self.config.items('hosts')
-        self.GAE_HOST          = self.config.get('gae', 'host')
+        self.GAE_APPID         = self.config.get('gae', 'appid')
         self.GAE_PASSWORD      = self.config.get('gae', 'password').strip()
-        self.GAE_HOSTS         = self.GAE_HOST.split('|')
+        self.GAE_HOSTS         = ['%s.appspot.com' % x for x in self.GAE_APPID.split('|')]
         self.GAE_PATH          = self.config.get('gae', 'path')
         self.GAE_PREFER        = self.config.get('gae', 'prefer')
         self.GAE_HTTP          = self.config.get('gae', 'http').split('|')
@@ -96,7 +96,7 @@ class Common(object):
         if self.GAE_PROXY:
             print 'Local Proxy  : %s' % self.GAE_PROXY
         print 'GAE Mode     : %s' % self.GAE_PREFER
-        print 'GAE Servers  : %s' % self.GAE_HOST
+        print 'GAE Servers  : %s' % '|'.join(self.GAE_HOSTS)
         if self.GAE_BINDHOSTS:
             print 'GAE BindHost : %s' % self.GAE_BINDHOSTS
         print '--------------------------------------------'
