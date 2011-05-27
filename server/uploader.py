@@ -60,7 +60,7 @@ class MultiplexConnection(object):
     def connect(self, hosts, port, timeout, step, shuffle):
         if shuffle:
             hosts = hosts[:]
-            random_shuffle(hosts)
+            random.shuffle(hosts)
         for i in xrange(0, len(hosts), step):
             logging.debug('MultiplexConnection connect hosts[%d:%d+%d]', i, i, step)
             socks = []
