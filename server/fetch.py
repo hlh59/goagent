@@ -12,6 +12,7 @@ from google.appengine.ext import webapp
 from google.appengine.ext import db
 from google.appengine.ext.webapp.util import run_wsgi_app
 from google.appengine.api import urlfetch
+from google.appengine.api import xmpp
 from google.appengine.runtime import apiproxy_errors, DeadlineExceededError
 
 def encode_data(dic):
@@ -184,8 +185,13 @@ class MainHandler(webapp.RequestHandler):
 </html>
 ''' % dict(version=__version__))
 
+class XMPPHandler(webapp.RequestHandler):
+    def post(self):
+        message = xmpp.Message(self.request.POST)
+        message.reply(message.body)
+
 def main():
-    application = webapp.WSGIApplication([(r'/fetch.py', MainHandler)], debug=True)
+    application = webapp.WSGIApplication([('/_ah/xmpp/message/chat/', XMPPHandler),('/fetch.py', MainHandler)],debug=True)
     run_wsgi_app(application)
 
 if __name__ == '__main__':
