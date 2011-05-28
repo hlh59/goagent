@@ -3,11 +3,6 @@
 # Based on GAppProxy 2.0.0 by Du XiaoGang <dugang@188.com>
 # Based on WallProxy 0.4.0 by hexieshe <www.ehust@gmail.com>
 
-##import psyco
-##psyco.full()
-##import gevent.monkey
-##gevent.monkey.patch_all()
-
 import sys, os, re, time
 import errno, zlib, struct, binascii
 import logging
@@ -49,10 +44,10 @@ class Common(object):
         self.LISTEN_VISIBLE    = self.config.getint('listen', 'visible')
         self.LISTEN_DEBUG      = self.config.get('listen', 'debug')
         self.HOSTS             = self.config.items('hosts')
-        self.GAE_APPID         = self.config.get('gae', 'appid')
+        self.GAE_APPIDS        = self.config.get('gae', 'appid').split('|')
         self.GAE_PASSWORD      = self.config.get('gae', 'password').strip()
-        self.GAE_HOSTS         = ['%s.appspot.com' % x for x in self.GAE_APPID.split('|')]
-        self.GAE_PATH          = self.config.get('gae', 'path')
+        #self.GAE_PATH          = self.config.get('gae', 'path')
+        self.GAE_PATH          = '/fetch.py'
         self.GAE_PREFER        = self.config.get('gae', 'prefer')
         self.GAE_HTTP          = self.config.get('gae', 'http').split('|')
         self.GAE_HTTP_TIMEOUT  = self.config.getint('gae', 'http_timeout')
@@ -62,8 +57,10 @@ class Common(object):
         self.GAE_HTTPS_TIMEOUT = self.config.getint('gae', 'https_timeout')
         self.GAE_HTTPS_STEP    = self.config.getint('gae', 'https_step')
         self.GAE_HTTPS_SHUFFLE = self.config.getint('gae', 'https_shuffle')
+        self.GAE_XMPP_USERNAME = self.config.get('gae', 'xmpp_username')
+        self.GAE_XMPP_PASSWORD = self.config.get('gae', 'xmpp_password')
         self.GAE_PROXY         = dict(re.match(r'^(\w+)://(\S+)$', proxy.strip()).group(1, 2) for proxy in self.config.get('gae', 'proxy').split('|')) if self.config.has_option('gae', 'proxy') else {}
-        self.GAE_BINDHOSTS     = dict((host, random_choice(self.GAE_HOSTS)) for host in self.config.get('gae', 'bindhosts').split('|')) if self.config.has_option('gae', 'bindhosts') else {}
+        self.GAE_BINDHOSTS     = dict((host, random_choice(self.GAE_APPIDS)) for host in self.config.get('gae', 'bindhosts').split('|')) if self.config.has_option('gae', 'bindhosts') else {}
         logging.basicConfig(level=getattr(logging, self.LISTEN_DEBUG), format='%(levelname)s - - %(asctime)s %(message)s', datefmt='[%d/%b/%Y %H:%M:%S]')
         self.expand_gaedomain()
 
@@ -80,14 +77,14 @@ class Common(object):
         self.GAE_HTTPS = expand(self.GAE_HTTPS)
         self.HOSTS = [(hostpat, '|'.join(expand(hosts.split('|')))) for hostpat, hosts in self.HOSTS]
 
-    def select_gaehost(self, url):
-        gaehost = None
-        if len(self.GAE_HOSTS) == 1:
-            return self.GAE_HOSTS[0]
+    def select_appid(self, url):
+        appid = None
+        if len(self.GAE_APPIDS) == 1:
+            return self.GAE_APPIDS[0]
         if self.GAE_BINDHOSTS:
-            gaehost = self.GAE_BINDHOSTS.get(urlparse.urlsplit(url)[1])
-        gaehost = gaehost or random_choice(self.GAE_HOSTS)
-        return gaehost
+            appid = self.GAE_BINDHOSTS.get(urlparse.urlsplit(url)[1])
+        appid = appid or random_choice(self.GAE_APPIDS)
+        return appid
 
     def show(self):
         print '--------------------------------------------'
@@ -96,7 +93,7 @@ class Common(object):
         if self.GAE_PROXY:
             print 'Local Proxy  : %s' % self.GAE_PROXY
         print 'GAE Mode     : %s' % self.GAE_PREFER
-        print 'GAE Servers  : %s' % '|'.join(self.GAE_HOSTS)
+        print 'GAE APPID    : %s' % '|'.join(self.GAE_APPIDS)
         if self.GAE_BINDHOSTS:
             print 'GAE BindHost : %s' % self.GAE_BINDHOSTS
         print '--------------------------------------------'
@@ -321,8 +318,8 @@ class GaeProxyHandler(BaseHTTPServer.BaseHTTPRequestHandler):
         params = zlib.compress(params, 9)
         for i in range(1, 4):
             try:
-                gaehost = common.select_gaehost(url)
-                fetchserver = '%s://%s%s' % (common.GAE_PREFER, gaehost, common.GAE_PATH)
+                appid = common.select_appid(url)
+                fetchserver = '%s://%s.appspot.com%s' % (common.GAE_PREFER, appid, common.GAE_PATH)
                 logging.debug('GaeProxyHandler fetch %r from %r', url, fetchserver)
                 request = urllib2.Request(fetchserver, params)
                 request.add_header('Content-Type', 'application/octet-stream')
