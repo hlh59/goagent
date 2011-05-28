@@ -7,7 +7,7 @@ __version__ = 'beta'
 __author__ =  'phus.lu@gmail.com'
 __password__ = ''
 
-import zlib, logging, time, re, struct
+import zlib, logging, time, re, struct, base64
 from google.appengine.ext import webapp
 from google.appengine.ext import db
 from google.appengine.ext.webapp.util import run_wsgi_app
@@ -46,6 +46,19 @@ class MainHandler(webapp.RequestHandler):
             logging.debug('Response: "%s %s" %d %d/%d/%d' % (method, url, status_code, len(content), len(rdata), len(data)))
         return self.response.out.write(data)
 
+    def sendXmppResponse(self, xmpp_message, status_code, headers, content='', method='', url=''):
+        self.response.headers['Content-Type'] = 'application/octet-stream'
+        contentType = headers.get('content-type', '').lower()
+
+        headers = encode_data(headers)
+        rdata = '%s%s%s' % (struct.pack('>3I', status_code, len(headers), len(content)), headers, content)
+        data = '2' + base64.b64encode(rdata)
+        if status_code == 555:
+            logging.warning('Response: "%s %s" %s' % (method, url, content))
+        else:
+            logging.debug('Response: "%s %s" %d %d/%d/%d' % (method, url, status_code, len(content), len(rdata), len(data)))
+        xmpp_message.reply(data)
+
     def sendNotify(self, status_code, content, method='', url='', fullContent=False):
         if not fullContent and status_code!=555:
             content = '<h2>Fetch Server Info</h2><hr noshade="noshade"><p>Code: %d</p>' \
@@ -54,7 +67,15 @@ class MainHandler(webapp.RequestHandler):
         self.sendResponse(status_code, headers, content, method, url)
 
     def post(self):
-        request = decode_data(zlib.decompress(self.request.body))
+        xmpp_mode = (self.request.path == '/_ah/xmpp/message/chat/')
+        if xmpp_mode:
+            xmpp_message = xmpp.Message(self.request.POST)
+            request = decode_data(xmpp_message.body.replace('&amp;', '&'))
+            logging.debug('MainHandler post get xmpp request %s', request)
+        else:
+            xmpp_message = None
+            request = decode_data(zlib.decompress(self.request.body))
+            #logging.debug('MainHandler post get fetch request %s', request)
 
         if __password__ and __password__ != request.get('password', ''):
             return self.sendNotify(403, 'Fobbidon -- wrong password. Please check your proxy.ini and fetch.py.')
@@ -147,7 +168,10 @@ class MainHandler(webapp.RequestHandler):
                     i += 1
             response.headers['set-cookie'] = '\r\nSet-Cookie: '.join(cookies)
         response.headers['connection'] = 'close'
-        return self.sendResponse(response.status_code, response.headers, response.content, method, url)
+        if xmpp_mode:
+            return self.sendXmppResponse(xmpp_message, response.status_code, response.headers, response.content, method, url)
+        else:
+            return self.sendResponse(response.status_code, response.headers, response.content, method, url)
 
     def get(self):
         self.response.headers['Content-Type'] = 'text/html; charset=utf-8'
@@ -185,13 +209,8 @@ class MainHandler(webapp.RequestHandler):
 </html>
 ''' % dict(version=__version__))
 
-class XMPPHandler(webapp.RequestHandler):
-    def post(self):
-        message = xmpp.Message(self.request.POST)
-        message.reply(message.body)
-
 def main():
-    application = webapp.WSGIApplication([('/_ah/xmpp/message/chat/', XMPPHandler),('/fetch.py', MainHandler)],debug=True)
+    application = webapp.WSGIApplication([('/_ah/xmpp/message/chat/', MainHandler),('/fetch.py', MainHandler)],debug=True)
     run_wsgi_app(application)
 
 if __name__ == '__main__':
