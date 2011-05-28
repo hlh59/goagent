@@ -57,6 +57,8 @@ class Common(object):
         self.GAE_HTTPS_TIMEOUT = self.config.getint('gae', 'https_timeout')
         self.GAE_HTTPS_STEP    = self.config.getint('gae', 'https_step')
         self.GAE_HTTPS_SHUFFLE = self.config.getint('gae', 'https_shuffle')
+        self.GAE_XMPP_SERVER   = self.config.get('gae', 'xmpp_server')
+        self.GAE_XMPP_PORT     = self.config.getint('gae', 'xmpp_port')
         self.GAE_XMPP_USERNAME = self.config.get('gae', 'xmpp_username')
         self.GAE_XMPP_PASSWORD = self.config.get('gae', 'xmpp_password')
         self.GAE_PROXY         = dict(re.match(r'^(\w+)://(\S+)$', proxy.strip()).group(1, 2) for proxy in self.config.get('gae', 'proxy').split('|')) if self.config.has_option('gae', 'proxy') else {}
@@ -303,6 +305,110 @@ def build_opener():
     opener.addheaders = []
     return opener
 
+class XmppProxyHandler(BaseHTTPServer.BaseHTTPRequestHandler):
+    partSize = 1024000
+    fetchTimeout = 5
+    FR_Headers = ('', 'host', 'vary', 'via', 'x-forwarded-for', 'proxy-authorization', 'proxy-connection', 'upgrade', 'keep-alive')
+    opener = build_opener()
+
+    def _talk(self, url, method, headers, payload):
+        errors = []
+        params = {'url':url, 'method':method, 'headers':headers, 'payload':payload}
+        if common.GAE_PASSWORD:
+            params['password'] = common.GAE_PASSWORD
+        params = gae_encode_data(params)
+        for i in range(1, 4):
+            try:
+                appid = common.select_appid(url)
+                xmppid = '%s@appspot.com' % appid
+                logging.debug('XmppProxyHandler talk %r with %r', url, xmppid)
+                request = urllib2.Request(xmppid, params)
+                request.add_header('Content-Type', 'application/octet-stream')
+                response = self.__class__.opener.open(request)
+                data = response.read()
+                response.close()
+            except urllib2.HTTPError, e:
+                # www.google.cn:80 is down, switch to https
+                if e.code == 502 or e.code == 504:
+                    common.GAE_PREFER = 'https'
+                    common.show()
+                errors.append('%d: %s' % (e.code, httplib.responses.get(e.code, 'Unknown HTTPError')))
+                continue
+            except urllib2.URLError, e:
+                if e.reason[0] in (11004, 10051, 10054, 10060, 'timed out'):
+                    # it seems that google.cn is reseted, switch to https
+                    if e.reason[0] == 10054:
+                        common.GAE_PREFER = 'https'
+                        common.show()
+                errors.append(str(e))
+                continue
+            except Exception, e:
+                errors.append(repr(e))
+                continue
+
+            try:
+                if data[0] == '0':
+                    raw_data = data[1:]
+                elif data[0] == '1':
+                    raw_data = zlib.decompress(data[1:])
+                else:
+                    raise ValueError('Data format not match(%s)' % url)
+                data = {}
+                data['code'], hlen, clen = struct.unpack('>3I', raw_data[:12])
+                if len(raw_data) != 12+hlen+clen:
+                    raise ValueError('Data length not match')
+                data['content'] = raw_data[12+hlen:]
+                if data['code'] == 555:     #Urlfetch Failed
+                    raise ValueError(data['content'])
+                data['headers'] = gae_decode_data(raw_data[12:12+hlen])
+                return (0, data)
+            except Exception, e:
+                errors.append(str(e))
+        return (-1, errors)
+
+    def do_METHOD(self):
+        if self.path.startswith('/'):
+            host = self.headers['host']
+            if host.endswith(':80'):
+                host = host[:-3]
+            self.path = 'http://%s%s' % (host , self.path)
+
+        payload_len = int(self.headers.get('content-length', 0))
+        if payload_len > 0:
+            payload = self.rfile.read(payload_len)
+        else:
+            payload = ''
+
+        for k in self.__class__.FR_Headers:
+            try:
+                del self.headers[k]
+            except KeyError:
+                pass
+
+        retval, data = self._talk(self.path, self.command, self.headers, payload)
+        try:
+            if retval == -1:
+                return self.end_error(502, str(data))
+            if data['code']==206 and self.command=='GET':
+                m = re.search(r'bytes\s+(\d+)-(\d+)/(\d+)', data['headers'].get('content-range',''))
+                if m and self._RangeFetch(m, data):
+                    return
+            self.send_response(data['code'])
+            for k,v in data['headers'].iteritems():
+                self.send_header(k.title(), v)
+            self.end_headers()
+            self.wfile.write(data['content'])
+        except socket.error, (err, _):
+            # Connection closed before proxy return
+            if err == errno.EPIPE or err == 10053:
+                return
+        self.connection.close()
+
+    do_GET = do_METHOD
+    do_POST = do_METHOD
+    do_PUT = do_METHOD
+    do_DELETE = do_METHOD
+
 class GaeProxyHandler(BaseHTTPServer.BaseHTTPRequestHandler):
     partSize = 1024000
     fetchTimeout = 5
@@ -465,9 +571,6 @@ class GaeProxyHandler(BaseHTTPServer.BaseHTTPRequestHandler):
     do_PUT = do_METHOD
     do_DELETE = do_METHOD
 
-class PhpProxyHandler(BaseHTTPServer.BaseHTTPRequestHandler):
-    pass
-
 class ConnectProxyHandler(BaseHTTPServer.BaseHTTPRequestHandler):
 
     def do_CONNECT(self):
@@ -609,7 +712,7 @@ class ConnectProxyHandler(BaseHTTPServer.BaseHTTPRequestHandler):
         ssl_sock.close()
         self.connection.close()
 
-class LocalProxyHandler(ConnectProxyHandler, GaeProxyHandler):
+class LocalProxyHandler(ConnectProxyHandler, GaeProxyHandler, XmppProxyHandler):
 
     def address_string(self):
         return '%s:%s' % self.client_address[:2]
@@ -650,11 +753,12 @@ class LocalProxyHandler(ConnectProxyHandler, GaeProxyHandler):
             else:
                 raise
 
+    ProxyMap = {'http':GaeProxyHandler,'https':GaeProxyHandler,'xmpp':XmppProxyHandler}
     do_CONNECT = ConnectProxyHandler.do_CONNECT
-    do_GET     = GaeProxyHandler.do_GET
-    do_POST    = GaeProxyHandler.do_POST
-    do_PUT     = GaeProxyHandler.do_PUT
-    do_DELETE  = GaeProxyHandler.do_DELETE
+    do_GET     = ProxyMap[common.GAE_PREFER].do_GET
+    do_POST    = ProxyMap[common.GAE_PREFER].do_POST
+    do_PUT     = ProxyMap[common.GAE_PREFER].do_PUT
+    do_DELETE  = ProxyMap[common.GAE_PREFER].do_DELETE
 
 class LocalProxyServer(SocketServer.ThreadingMixIn, BaseHTTPServer.HTTPServer):
     address_family = {True:socket.AF_INET6, False:socket.AF_INET}[':' in common.LISTEN_IP]
