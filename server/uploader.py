@@ -58,7 +58,7 @@ class MultiplexConnection(object):
             logging.debug('MultiplexConnection connect hosts[%d:%d+%d]', i, i, step)
             socks = []
             for j in xrange(i, i+step):
-                host = hosts[i]
+                host = hosts[j]
                 sock_family = socket.AF_INET if '.' in host else socket.AF_INET6
                 sock = socket.socket(sock_family, socket.SOCK_STREAM)
                 sock.setblocking(0)
