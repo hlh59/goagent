@@ -57,7 +57,10 @@ class MainHandler(webapp.RequestHandler):
             logging.warning('Response: "%s %s" %s' % (method, url, content))
         else:
             logging.debug('Response: "%s %s" %d %d/%d/%d' % (method, url, status_code, len(content), len(rdata), len(data)))
-        xmpp_message.reply(data)
+        maxsize = 2000
+        for i in xrange(0, len(data), maxsize):
+            xmpp_message.reply(data[i:i+maxsize]+'\r\n')
+        xmpp_message.reply('\r\n')
 
     def sendNotify(self, status_code, content, method='', url='', fullContent=False):
         if not fullContent and status_code!=555:
