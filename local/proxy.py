@@ -44,24 +44,23 @@ class Common(object):
     def __init__(self):
         '''read config from proxy.ini'''
         self.config = ConfigParser.ConfigParser()
-        self.config.read(Common.FILENAME)
-        self.GAE_APPIDS        = self.config.get('gae', 'appid').split('|')
-        self.GAE_PASSWORD      = self.config.get('gae', 'password').strip()
-        self.GAE_PREFER      = self.config.get('gae', 'prefer')
-        self.GAE_IP         = self.config.get('gae', 'ip')
-        self.GAE_PORT       = self.config.getint('gae', 'port')
-        self.GAE_VISIBLE    = self.config.getint('gae', 'visible')
-        self.GAE_DEBUG      = self.config.get('gae', 'debug')
-        self.GAE_PROXY         = dict(re.match(r'^(\w+)://(\S+)$', proxy.strip()).group(1, 2) for proxy in self.config.get('gae', 'proxy').split('|')) if self.config.has_option('gae', 'proxy') else {}
-        self.GAE_BINDHOSTS     = dict((host, random_choice(self.GAE_APPIDS)) for host in self.config.get('gae', 'bindhosts').split('|')) if self.config.has_option('gae', 'bindhosts') else {}
-        self.GAE_PATH         = '/fetch.py'
+        self.config.read(self.__class__.FILENAME)
+        self.GAE_APPIDS    = self.config.get('gae', 'appid').split('|')
+        self.GAE_PASSWORD  = self.config.get('gae', 'password').strip()
+        self.GAE_PREFER    = self.config.get('gae', 'prefer')
+        self.GAE_IP        = self.config.get('gae', 'ip')
+        self.GAE_PORT      = self.config.getint('gae', 'port')
+        self.GAE_VISIBLE   = self.config.getint('gae', 'visible')
+        self.GAE_DEBUG     = self.config.get('gae', 'debug')
+        self.GAE_PROXY     = dict(re.match(r'^(\w+)://(\S+)$', proxy.strip()).group(1, 2) for proxy in self.config.get('gae', 'proxy').split('|')) if self.config.has_option('gae', 'proxy') else {}
+        self.GAE_BINDHOSTS = dict((host, random_choice(self.GAE_APPIDS)) for host in self.config.get('gae', 'bindhosts').split('|')) if self.config.has_option('gae', 'bindhosts') else {}
+        self.GAE_PATH      = '/fetch.py'
 
-        #self.GAE_PATH          = '/fetch.py'
-        self.HTTP_HOSTS          = self.config.get('http', 'hosts').split('|')
+        self.HTTP_HOSTS    = self.config.get('http', 'hosts').split('|')
         self.HTTP_TIMEOUT  = self.config.getint('http', 'timeout')
         self.HTTP_STEP     = self.config.getint('http', 'step')
         self.HTTP_SHUFFLE  = self.config.getint('http', 'shuffle')
-        self.HTTPS_HOSTS         = self.config.get('https', 'hosts').split('|')
+        self.HTTPS_HOSTS   = self.config.get('https', 'hosts').split('|')
         self.HTTPS_TIMEOUT = self.config.getint('https', 'timeout')
         self.HTTPS_STEP    = self.config.getint('https', 'step')
         self.HTTPS_SHUFFLE = self.config.getint('https', 'shuffle')
@@ -69,8 +68,8 @@ class Common(object):
         self.XMPP_PORT     = self.config.getint('xmpp', 'port')
         self.XMPP_USERNAME = self.config.get('xmpp', 'username')
         self.XMPP_PASSWORD = self.config.get('xmpp', 'password')
+        self.HOSTS         = self.config.items('hosts')
         logging.basicConfig(level=getattr(logging, self.GAE_DEBUG), format='%(levelname)s - - %(asctime)s %(message)s', datefmt='[%d/%b/%Y %H:%M:%S]')
-        self.HOSTS             = self.config.items('hosts')
         self.expand_gaedomain()
 
     def expand_gaedomain(self):
@@ -113,7 +112,7 @@ if __name__ == '__main__':
     common = Common()
 
 class MultiplexConnection(object):
-    '''random tcp connection class'''
+    '''multiplex tcp connection class'''
     def __init__(self, hosts, port, timeout, step, shuffle=0):
         self.socket = None
         self._sockets = set([])
@@ -126,7 +125,10 @@ class MultiplexConnection(object):
             logging.debug('MultiplexConnection connect hosts[%d:%d+%d]', i, i, step)
             socks = []
             for j in xrange(i, i+step):
-                host = hosts[j]
+                try:
+                    host = hosts[j]
+                except IndexError:
+                    break
                 sock_family = socket.AF_INET if '.' in host else socket.AF_INET6
                 sock = socket.socket(sock_family, socket.SOCK_STREAM)
                 sock.setblocking(0)
