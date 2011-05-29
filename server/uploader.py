@@ -92,7 +92,7 @@ def socket_create_connection(address, timeout=10, source_address=None):
     if host.endswith(('.google.com', '.appspot.com')):
         msg = "socket_create_connection returns an empty list"
         try:
-            hosts, timeout, step, shuffle = GOOGLE_IP_LIST, 5, 16, 1
+            hosts, timeout, step, shuffle = GOOGLE_IP_LIST, 5, 3, 1
             logging.debug("socket_create_connection connect hosts: (%r, %r)", hosts, port)
             conn = MultiplexConnection(hosts, port, timeout, step, shuffle)
             conn.close()
