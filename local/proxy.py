@@ -287,7 +287,7 @@ class RootCA(object):
                     key, crt = RootCA.makeCert(host, RootCA.CA, SERIAL)
                     RootCA.writeFile(keyFile, key)
                     RootCA.writeFile(crtFile, crt)
-                    RootCA.writeFile(os.path.join(basedir, 'ssl/serial'), str(SERIAL))
+                    RootCA.writeFile(serialFile, str(SERIAL))
         return (keyFile, crtFile)
 
     @staticmethod
