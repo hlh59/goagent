@@ -190,18 +190,11 @@ httplib.HTTPConnection.putrequest = httplib_HTTPConnection_putrequest
 class RootCA(object):
     '''RootCA module, based on WallProxy 0.4.0'''
 
-    BASEDIR = os.path.dirname(__file__)
+    CA = None
+    CALock = threading.Lock()
 
-    def __init__(self):
-        #homedir = os.environ['USERPROFILE' if os.name == 'nt' else 'HOME']
-        homedir = os.path.dirname(__file__)
-        self.cert_dir = os.path.join(homedir, 'certs')
-        try:
-            self.checkCA()
-        except:
-            pass
-
-    def readFile(self, filename):
+    @staticmethod
+    def readFile(filename):
         try:
             f = open(filename, 'rb')
             c = f.read()
@@ -210,19 +203,22 @@ class RootCA(object):
         except IOError:
             return None
 
-    def writeFile(self, filename, content):
+    @staticmethod
+    def writeFile(filename, content):
         f = open(filename, 'wb')
         f.write(str(content))
         f.close()
 
-    def createKeyPair(self, type=None, bits=1024):
+    @staticmethod
+    def createKeyPair(type=None, bits=1024):
         if type is None:
             type = OpenSSL.crypto.TYPE_RSA
         pkey = OpenSSL.crypto.PKey()
         pkey.generate_key(type, bits)
         return pkey
 
-    def createCertRequest(self, pkey, digest='sha1', **subj):
+    @staticmethod
+    def createCertRequest(pkey, digest='sha1', **subj):
         req = OpenSSL.crypto.X509Req()
         subject = req.get_subject()
         for k,v in subj.iteritems():
@@ -231,7 +227,8 @@ class RootCA(object):
         req.sign(pkey, digest)
         return req
 
-    def createCertificate(self, req, (issuerKey, issuerCert), serial, (notBefore, notAfter), digest='sha1'):
+    @staticmethod
+    def createCertificate(req, (issuerKey, issuerCert), serial, (notBefore, notAfter), digest='sha1'):
         cert = OpenSSL.crypto.X509()
         cert.set_serial_number(serial)
         cert.gmtime_adj_notBefore(notBefore)
@@ -242,68 +239,68 @@ class RootCA(object):
         cert.sign(issuerKey, digest)
         return cert
 
-    def loadPEM(self, pem, type):
+    @staticmethod
+    def loadPEM(pem, type):
         handlers = ('load_privatekey', 'load_certificate_request', 'load_certificate')
         return getattr(OpenSSL.crypto, handlers[type])(OpenSSL.crypto.FILETYPE_PEM, pem)
 
-    def dumpPEM(self, obj, type):
+    @staticmethod
+    def dumpPEM(obj, type):
         handlers = ('dump_privatekey', 'dump_certificate_request', 'dump_certificate')
         return getattr(OpenSSL.crypto, handlers[type])(OpenSSL.crypto.FILETYPE_PEM, obj)
 
-    def makeCA(self):
-        pkey = self.createKeyPair(bits=2048)
+    @staticmethod
+    def makeCA():
+        pkey = RootCA.createKeyPair(bits=2048)
         subj = {'countryName': 'CN', 'stateOrProvinceName': 'Internet',
                 'localityName': 'Cernet', 'organizationName': 'GoAgent',
                 'organizationalUnitName': 'GoAgent Root', 'commonName': 'GoAgent CA'}
-        req = self.createCertRequest(pkey, **subj)
-        cert = self.createCertificate(req, (pkey, req), 0, (0, 60*60*24*7305))  #20 years
-        return (self.dumpPEM(pkey, 0), self.dumpPEM(cert, 2))
+        req = RootCA.createCertRequest(pkey, **subj)
+        cert = RootCA.createCertificate(req, (pkey, req), 0, (0, 60*60*24*7305))  #20 years
+        return (RootCA.dumpPEM(pkey, 0), RootCA.dumpPEM(cert, 2))
 
-    def makeCert(self, host, (cakey, cacrt), serial):
-        pkey = self.createKeyPair()
+    @staticmethod
+    def makeCert(host, (cakey, cacrt), serial):
+        pkey = RootCA.createKeyPair()
         subj = {'countryName': 'CN', 'stateOrProvinceName': 'Internet',
                 'localityName': 'Cernet', 'organizationName': host,
                 'organizationalUnitName': 'GoAgent Branch', 'commonName': host}
-        req = self.createCertRequest(pkey, **subj)
-        cert = self.createCertificate(req, (cakey, cacrt), serial, (0, 60*60*24*7305))
-        return (self.dumpPEM(pkey, 0), self.dumpPEM(cert, 2))
+        req = RootCA.createCertRequest(pkey, **subj)
+        cert = RootCA.createCertificate(req, (cakey, cacrt), serial, (0, 60*60*24*7305))
+        return (RootCA.dumpPEM(pkey, 0), RootCA.dumpPEM(cert, 2))
 
-    def getCertificate(self, host):
-        keyFile = os.path.join(self.cert_dir, '%s.key' % host)
-        crtFile = os.path.join(self.cert_dir, '%s.crt' % host)
-        if not os.path.isfile(keyFile) or not os.path.isfile(crtFile):
-            if not openssl_enabled:
-                keyFile = os.path.join(self.BASEDIR, 'ssl/ca.key')
-                crtFile = os.path.join(self.BASEDIR, 'ssl/ca.crt')
-                return (keyFile, crtFile)
-            self.SERIAL += 1
-            key, crt = self.makeCert(host, self.CA, self.SERIAL)
-            self.writeFile(keyFile, key)
-            self.writeFile(crtFile, crt)
-            self.writeFile(os.path.join(self.BASEDIR, 'ssl/serial'), self.SERIAL)
+    @staticmethod
+    def getCertificate(host):
+        basedir = os.path.dirname(__file__)
+        if not openssl_enabled:
+            keyFile = os.path.join(basedir, 'ssl/ca.key')
+            crtFile = os.path.join(basedir, 'ssl/ca.crt')
+            return (keyFile, crtFile)
+        keyFile = os.path.join(basedir, 'certs/%s.key' % host)
+        crtFile = os.path.join(basedir, 'certs/%s.crt' % host)
+        if not os.path.isfile(keyFile):
+            with RootCA.CALock:
+                if not os.path.isfile(keyFile):
+                    serialFile = os.path.join(basedir, 'ssl/serial')
+                    SERIAL = RootCA.readFile(serialFile)
+                    SERIAL = int(SERIAL)+1
+                    key, crt = RootCA.makeCert(host, RootCA.CA, SERIAL)
+                    RootCA.writeFile(keyFile, key)
+                    RootCA.writeFile(crtFile, crt)
+                    RootCA.writeFile(os.path.join(basedir, 'ssl/serial'), str(SERIAL))
         return (keyFile, crtFile)
 
-    def checkCA(self):
-        #Check cert directory
-        if not os.path.isdir(self.cert_dir):
-            if os.path.isfile(self.cert_dir):
-                os.remove(self.cert_dir)
-            os.mkdir(self.cert_dir)
+    @staticmethod
+    def checkCA():
         #Check CA imported
         if os.name == 'nt' and os.system('ssl\\addroot.bat') != 0:
             logging.warn('Import GoAgent CA \'local/ssl/ca.crt\' failed.')
         #Check CA file
-        cakeyFile = os.path.join(self.BASEDIR, 'ssl/ca.key')
-        cacrtFile = os.path.join(self.BASEDIR, 'ssl/ca.crt')
-        serialFile = os.path.join(self.BASEDIR, 'ssl/serial')
-        cakey = self.readFile(cakeyFile)
-        cacrt = self.readFile(cacrtFile)
-        self.SERIAL = self.readFile(serialFile)
-        self.SERIAL = int(self.SERIAL)
-        self.CA = (self.loadPEM(cakey, 0), self.loadPEM(cacrt, 2))
-
-if __name__ == '__main__':
-    rootca = RootCA()
+        cakeyFile = os.path.join(os.path.dirname(__file__), 'ssl/ca.key')
+        cacrtFile = os.path.join(os.path.dirname(__file__), 'ssl/ca.crt')
+        cakey = RootCA.readFile(cakeyFile)
+        cacrt = RootCA.readFile(cacrtFile)
+        RootCA.CA = (RootCA.loadPEM(cakey, 0), RootCA.loadPEM(cacrt, 2))
 
 def gae_encode_data(dic):
     from binascii import b2a_hex
@@ -319,11 +316,13 @@ class GaeProxyHandler(BaseHTTPServer.BaseHTTPRequestHandler):
     FR_Headers = ('', 'host', 'vary', 'via', 'x-forwarded-for', 'proxy-authorization', 'proxy-connection', 'upgrade', 'keep-alive')
     opener = None
     xmppclient = None
+    opener_lock = threading.Lock()
+    xmppclient_lock = threading.Lock()
 
     def _opener(self):
         '''double-checked locking url opener'''
         if self.opener is None:
-            with threading.Lock():
+            with GaeProxyHandler.opener_lock:
                 if self.opener is None:
                     self.opener = urllib2.build_opener(urllib2.ProxyHandler(common.GAE_PROXY))
                     self.opener.addheaders = []
@@ -332,7 +331,7 @@ class GaeProxyHandler(BaseHTTPServer.BaseHTTPRequestHandler):
     def _xmppclient(self):
         '''double-checked locking xmppclient'''
         if self.xmppclient is None:
-            with threading.Lock():
+            with GaeProxyHandler.xmppclient_lock:
                 if self.xmppclient is None:
                     logging.debug('GaeProxyHandler xmppclient connect %s:%s', common.XMPP_SERVER, common.XMPP_PORT)
                     self.xmppclient = xmpp.Client(common.XMPP_SERVER, common.XMPP_PORT, [])
@@ -573,7 +572,7 @@ class ConnectProxyHandler(BaseHTTPServer.BaseHTTPRequestHandler):
     def _forward(self):
         # for ssl proxy
         host, _, port = self.path.rpartition(':')
-        keyFile, crtFile = rootca.getCertificate(host)
+        keyFile, crtFile = RootCA.getCertificate(host)
         self.send_response(200)
         self.end_headers()
         try:
@@ -699,6 +698,7 @@ class LocalProxyServer(SocketServer.ThreadingMixIn, BaseHTTPServer.HTTPServer):
     allow_reuse_address = True
 
 if __name__ == '__main__':
+    RootCA.checkCA()
     sys.stdout.write(common.info())
     if os.name == 'nt' and not common.GAE_VISIBLE:
         ctypes.windll.user32.ShowWindow(ctypes.windll.kernel32.GetConsoleWindow(), 0)
