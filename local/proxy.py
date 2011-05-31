@@ -54,7 +54,7 @@ class Common(object):
         self.GAE_DEBUG     = self.config.get('gae', 'debug')
         self.GAE_PROXY     = dict(re.match(r'^(\w+)://(\S+)$', proxy.strip()).group(1, 2) for proxy in self.config.get('gae', 'proxy').split('|')) if self.config.has_option('gae', 'proxy') else {}
         self.GAE_BINDHOSTS = dict((host, random_choice(self.GAE_APPIDS)) for host in self.config.get('gae', 'bindhosts').split('|')) if self.config.has_option('gae', 'bindhosts') else {}
-        self.GAE_PATH      = '/fetch.py'
+        self.GAE_PATH      = self.config.get('gae', 'path')
 
         self.HTTP_HOSTS    = self.config.get('http', 'hosts').split('|')
         self.HTTP_TIMEOUT  = self.config.getint('http', 'timeout')
